@@ -1,0 +1,20 @@
+Prephix (Pre-Phrecon Input fiXer)
+
+Usage: prephix.pl k28.out_file1 [k28.out_file2 ...] -batchid <id> [-debug] [-quiet] [-exclude <loci_file>] [-ignore_quality]
+
+Takes in a list of input files and generates one SNP loci output file (containing multiple strains), one reference base file,
+and a file containing the excluded indel entries.
+
+The indel file is formated as "STRAIN ID" [TAB] k28|nuc|vcf [TAB] ...excluded VAAL K28, VCF, or NUCMER line...
+So prephix basically dumps the excluded lines as-is into the indel file, but prefixes each line
+with the strain id and then either k28 for VAAL formatted line, nuc for NUCMER formatted line, or vcf for VCF formatted line.
+
+The SNP loci and reference base files are suitable as input to the phrecon (Phylo Reconstructor) utility (i.e. tab
+delimited columnar format: STRAIN_ID [TAB] LOCI [TAB] BASE).
+
+The SNP loci file and indel files are suitable input for the SNP Swapper utility.
+
+Recognized input file formats: k28.out (VAAL), NUCMER, VCF
+
+You may mix input file types within a single run/batch.
+
