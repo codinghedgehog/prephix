@@ -27,12 +27,13 @@
 # 5/04/2012 - Andrew Pann - v2.2.1 Added support for loci exclusions.
 # 5/18/2012 - Andrew Pann - v2.3.0 Updated to generate just one indel file, with mixed VAAL and NUCMER indel lines with strain id in first column.
 # 7/07/2012 - Andrew Pann - v2.3.1 Added support for VCF files.
+# 11/14/2012 - Andrew Pann - v2.4.0 Added stats reporting.
 # 
 #
 
 use strict;
 
-my $VERSION="2.3.1 rev 1";
+my $VERSION="2.4.0";
 
 print "\nPrephix (Pre-Phrecon Input fiXer) v$VERSION\n\n";
 
@@ -71,6 +72,8 @@ my $input_type="k28";
 my $indelfile;
 my $indelFilename;
 my $ignore_quality="N";
+
+my %reportHash;  # Format is {strainId => [# SNPs, # insertions, # deletions]} (key is strainID, value is an array).
 
 # Process parameters
 $arg_num=0;
@@ -216,6 +219,19 @@ close($indelfile);
 print_all("\nMerged SNP loci file is $outFilename\n");
 print_all("Merged reference base file from this run is $refFilename\n");
 print_all("Merged indel file from this run is $indelFilename\n");
+
+
+# Write out stats report.
+print_all("Final report:\n\n");
+
+foreach my $strain (keys %reportHash){
+  print_all("Strain: $strain\n");
+  print_all("SNPs: $reportHash{$strain}[0]\n");
+  print_all("Insertions: $reportHash{$strain}[1]\n");
+  print_all("Deletions: $reportHash{$strain}[2]\n");
+	print_all("\n");
+}
+
 print_all("\nDone.\n");
 
 sub include_loci
@@ -282,6 +298,9 @@ sub do_vcf_file
 	}
 	print_debug("Strain ID is $currentStrain");
 
+	# Initialize report entry for this strain.
+	$reportHash{$currentStrain} = [0,0,0];
+
   $i=0;
   my $dataStart="N";
   while (<$infile>){
@@ -321,9 +340,19 @@ sub do_vcf_file
         print_debug("Skipping low-quality line: $_ ($inFilename)\n");
 				next;
 			}
-      if (( length($2) != 1 ) || ( length($3) != 1) ){
-        print_debug("Skipping indel line: $_ ($inFilename)\n");
+      if (length($2) != 1 ){
+        print_debug("Skipping indel line (deletion): $_ ($inFilename)\n");
         print $indelfile "$currentStrain\tvcf\t$_\n";
+
+				# Increment deletion count in report
+				$reportHash{"$currentStrain"}[2]++;
+      }
+      elsif (length($3) != 1){
+        print_debug("Skipping indel line (insertion): $_ ($inFilename)\n");
+        print $indelfile "$currentStrain\tvcf\t$_\n";
+
+				# Increment insertion count in report
+				$reportHash{"$currentStrain"}[1]++;
       }
       elsif(include_loci($realLoci) == 1){
         print $outfile "$currentStrain\t$realLoci\t$3\n"; # SNP loci file format is (StrainId [TAB] Loci [TAB] Base)
@@ -338,6 +367,9 @@ sub do_vcf_file
 					# Storing ref base in hash table; use loci as key, and value is array of base, input file name, and file line number.
 					# The file name and line number help us with reporting mismatched loci base collisions.
 					$refBaseTable{$realLoci}=["$2","$inFilename","$i"];
+
+					# Do report - increment SNP count.
+					$reportHash{"$currentStrain"}[0]++;
 				}
       }
 			else{
@@ -382,6 +414,9 @@ sub do_nucmer_file
 				$currentStrain=$1;
 				print_debug("$inFilename appears to be NUCMER format.\n");
 				print_debug("Found strain id of $currentStrain in file $inFilename\n");
+
+				# Initialize report entry for this strain.
+				$reportHash{"$currentStrain"} = [0,0,0];
 				next;
 			}
 			else{
@@ -420,7 +455,37 @@ sub do_nucmer_file
     # If it is not length 1, then it is either blank or have more than one base, so skip as indel.
     if (/^([0-9]+)\t([ATCG]*)\t([ATCG]*)\t[0-9]+/){
 			$realLoci=$1;
-      if (( length($2) != 1 ) || ( length($3) != 1) ){
+      if (length($2) != 1){
+				if (length($2) == 0){
+					print_debug("Skipping indel line (insertion): $_ ($inFilename)\n");
+					print $indelfile "$currentStrain\tnuc\t$_\n";
+
+					# Increment insertion count in report
+					$reportHash{"$currentStrain"}[2]++;
+				}
+        else{
+					print_debug("Skipping indel line (deletion): $_ ($inFilename)\n");
+					print $indelfile "$currentStrain\tnuc\t$_\n";
+
+					# Increment deletion count in report
+					$reportHash{"$currentStrain"}[3]++;
+				}
+      }
+      elsif (length($3) != 1){
+				if (length($3) == 0){
+					print_debug("Skipping indel line (deletion): $_ ($inFilename)\n");
+					print $indelfile "$currentStrain\tnuc\t$_\n";
+
+					# Increment deletion count in report
+					$reportHash{"$currentStrain"}[3]++;
+				}
+        else{
+					print_debug("Skipping indel line (insertion): $_ ($inFilename)\n");
+					print $indelfile "$currentStrain\tnuc\t$_\n";
+
+					# Increment insertion count in report
+					$reportHash{"$currentStrain"}[2]++;
+				}
         print_debug("Skipping indel line: $_ ($inFilename)\n");
         print $indelfile "$currentStrain\tnuc\t$_\n";
       }
@@ -437,6 +502,9 @@ sub do_nucmer_file
 					# Storing ref base in hash table; use loci as key, and value is array of base, input file name, and file line number.
 					# The file name and line number help us with reporting mismatched loci base collisions.
 					$refBaseTable{$realLoci}=["$2","$inFilename","$i"];
+
+					# Do report - increment SNP count.
+					$reportHash{"$currentStrain"}[0]++;
 				}
       }
 			else{
@@ -478,6 +546,9 @@ sub do_k28_file
 				$currentStrain=$1;
 				print_debug("$inFilename appears to be k28.out/VAAL format.\n");
 				print_debug("Found strain id of $currentStrain in file $inFilename\n");
+
+				# Initialize report entry for this strain.
+				$reportHash{"$currentStrain"} = [0,0,0];
 				next;
 			}
 			else{
@@ -509,7 +580,39 @@ sub do_k28_file
     if (/^[0-9]+\s+([0-9]+)\s+left=[ATCG]*\s+sample=([ATCG]*)\s+ref=([ATCG]*)\s+right=[ATCG]*$/){
 			$realLoci=$1;
 			$realLoci++; # VAAL k28.out file loci is offset by +1
-      if (( length($2) != 1 ) || ( length($3) != 1) ){
+      if (length($2) != 1){
+				if (length($2) == 0){
+					print_debug("Skipping indel line (deletion): $_ ($inFilename)\n");
+					print $indelfile "$currentStrain\tnuc\t$_\n";
+
+					# Increment deletion count in report
+					$reportHash{"$currentStrain"}[3]++;
+				}
+        else{
+					print_debug("Skipping indel line (insertion): $_ ($inFilename)\n");
+					print $indelfile "$currentStrain\tnuc\t$_\n";
+
+					# Increment insertion count in report
+					$reportHash{"$currentStrain"}[2]++;
+				}
+        print_debug("Skipping indel line: $_ ($inFilename)\n");
+        print $indelfile "$currentStrain\tk28\t$_\n";
+      }
+      elsif (length($3) != 1){
+				if (length($3) == 0){
+					print_debug("Skipping indel line (insertion): $_ ($inFilename)\n");
+					print $indelfile "$currentStrain\tnuc\t$_\n";
+
+					# Increment deletion count in report
+					$reportHash{"$currentStrain"}[2]++;
+				}
+        else{
+					print_debug("Skipping indel line (deletion): $_ ($inFilename)\n");
+					print $indelfile "$currentStrain\tnuc\t$_\n";
+
+					# Increment insertion count in report
+					$reportHash{"$currentStrain"}[3]++;
+				}
         print_debug("Skipping indel line: $_ ($inFilename)\n");
         print $indelfile "$currentStrain\tk28\t$_\n";
       }
@@ -526,6 +629,9 @@ sub do_k28_file
 					# Storing ref base in hash table; use loci as key, and value is array of base, input file name, and file line number.
 					# The file name and line number help us with reporting mismatched loci base collisions.
 					$refBaseTable{$realLoci}=["$3","$inFilename","$i"];
+
+					# Do report - increment SNP count.
+					$reportHash{"$currentStrain"}[0]++;
 				}
       }
 			else{
