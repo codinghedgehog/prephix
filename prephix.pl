@@ -34,7 +34,7 @@
 
 use strict;
 
-my $VERSION="2.4.0";
+my $VERSION="2.4.1";
 
 print "\nPrephix (Pre-Phrecon Input fiXer) v$VERSION\n\n";
 
