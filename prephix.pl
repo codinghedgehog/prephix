@@ -28,6 +28,7 @@
 # 5/18/2012 - Andrew Pann - v2.3.0 Updated to generate just one indel file, with mixed VAAL and NUCMER indel lines with strain id in first column.
 # 7/07/2012 - Andrew Pann - v2.3.1 Added support for VCF files.
 # 11/14/2012 - Andrew Pann - v2.4.0 Added stats reporting.
+# 11/14/2012 - Andrew Pann - v2.4.1 Added total indel count and loci exclusions to stats.  Fixed stats logic.
 # 
 #
 
@@ -73,7 +74,7 @@ my $indelfile;
 my $indelFilename;
 my $ignore_quality="N";
 
-my %reportHash;  # Format is {strainId => [# SNPs, # insertions, # deletions]} (key is strainID, value is an array).
+my %reportHash;  # Format is {strainId => [# SNPs, # insertions, # deletions, # exclusions]} (key is strainID, value is an array).
 
 # Process parameters
 $arg_num=0;
@@ -229,6 +230,9 @@ foreach my $strain (keys %reportHash){
   print_all("SNPs: $reportHash{$strain}[0]\n");
   print_all("Insertions: $reportHash{$strain}[1]\n");
   print_all("Deletions: $reportHash{$strain}[2]\n");
+	my $totalIndels =  $reportHash{$strain}[1] + $reportHash{$strain}[2];
+  print_all("Total indels: $totalIndels\n");
+  print_all("Loci excluded: $reportHash{$strain}[3]\n");
 	print_all("\n");
 }
 
@@ -299,7 +303,7 @@ sub do_vcf_file
 	print_debug("Strain ID is $currentStrain");
 
 	# Initialize report entry for this strain.
-	$reportHash{$currentStrain} = [0,0,0];
+	$reportHash{$currentStrain} = [0,0,0,0];
 
   $i=0;
   my $dataStart="N";
@@ -341,20 +345,28 @@ sub do_vcf_file
 				next;
 			}
       if (length($2) != 1 ){
+        print_debug("Found indel line (deletion): $_ ($inFilename)\n");
+
         print_debug("Skipping indel line (deletion): $_ ($inFilename)\n");
         print $indelfile "$currentStrain\tvcf\t$_\n";
 
 				# Increment deletion count in report
 				$reportHash{"$currentStrain"}[2]++;
+				next;
       }
-      elsif (length($3) != 1){
+
+      if (length($3) != 1){
+        print_debug("Found indel line (insertion): $_ ($inFilename)\n");
+
         print_debug("Skipping indel line (insertion): $_ ($inFilename)\n");
         print $indelfile "$currentStrain\tvcf\t$_\n";
 
 				# Increment insertion count in report
 				$reportHash{"$currentStrain"}[1]++;
+				next;
       }
-      elsif(include_loci($realLoci) == 1){
+
+      if(include_loci($realLoci) == 1){
         print $outfile "$currentStrain\t$realLoci\t$3\n"; # SNP loci file format is (StrainId [TAB] Loci [TAB] Base)
 
 				if ( (exists($refBaseTable{$realLoci})) && ($refBaseTable{$realLoci}[0] ne "$2") ){
@@ -374,6 +386,9 @@ sub do_vcf_file
       }
 			else{
         print_debug("Excluded loci $realLoci.\n");
+
+				# Do report - increment exclusion count.
+				$reportHash{"$currentStrain"}[3]++;
 			}
     }
     else{
@@ -416,7 +431,7 @@ sub do_nucmer_file
 				print_debug("Found strain id of $currentStrain in file $inFilename\n");
 
 				# Initialize report entry for this strain.
-				$reportHash{"$currentStrain"} = [0,0,0];
+				$reportHash{"$currentStrain"} = [0,0,0,0];
 				next;
 			}
 			else{
@@ -457,39 +472,41 @@ sub do_nucmer_file
 			$realLoci=$1;
       if (length($2) != 1){
 				if (length($2) == 0){
-					print_debug("Skipping indel line (insertion): $_ ($inFilename)\n");
-					print $indelfile "$currentStrain\tnuc\t$_\n";
+					print_debug("Found indel line (insertion): $_ ($inFilename)\n");
 
 					# Increment insertion count in report
-					$reportHash{"$currentStrain"}[2]++;
+					$reportHash{"$currentStrain"}[1]++;
 				}
         else{
-					print_debug("Skipping indel line (deletion): $_ ($inFilename)\n");
-					print $indelfile "$currentStrain\tnuc\t$_\n";
+					print_debug("Found indel line (deletion): $_ ($inFilename)\n");
 
 					# Increment deletion count in report
-					$reportHash{"$currentStrain"}[3]++;
-				}
-      }
-      elsif (length($3) != 1){
-				if (length($3) == 0){
-					print_debug("Skipping indel line (deletion): $_ ($inFilename)\n");
-					print $indelfile "$currentStrain\tnuc\t$_\n";
-
-					# Increment deletion count in report
-					$reportHash{"$currentStrain"}[3]++;
-				}
-        else{
-					print_debug("Skipping indel line (insertion): $_ ($inFilename)\n");
-					print $indelfile "$currentStrain\tnuc\t$_\n";
-
-					# Increment insertion count in report
 					$reportHash{"$currentStrain"}[2]++;
 				}
         print_debug("Skipping indel line: $_ ($inFilename)\n");
         print $indelfile "$currentStrain\tnuc\t$_\n";
+				next;
       }
-      elsif(include_loci($realLoci) == 1){
+
+      if (length($3) != 1){
+				if (length($3) == 0){
+					print_debug("Found indel line (deletion): $_ ($inFilename)\n");
+
+					# Increment deletion count in report
+					$reportHash{"$currentStrain"}[2]++;
+				}
+        else{
+					print_debug("Found indel line (insertion): $_ ($inFilename)\n");
+
+					# Increment insertion count in report
+					$reportHash{"$currentStrain"}[1]++;
+				}
+        print_debug("Skipping indel line: $_ ($inFilename)\n");
+        print $indelfile "$currentStrain\tnuc\t$_\n";
+				next;
+      }
+
+      if(include_loci($realLoci) == 1){
         print $outfile "$currentStrain\t$realLoci\t$3\n"; # SNP loci file format is (StrainId [TAB] Loci [TAB] Base)
 
 				if ( (exists($refBaseTable{$realLoci})) && ($refBaseTable{$realLoci}[0] ne "$2") ){
@@ -509,6 +526,9 @@ sub do_nucmer_file
       }
 			else{
         print_debug("Excluded loci $realLoci.\n");
+
+				# Do report - increment exclusion count.
+				$reportHash{"$currentStrain"}[3]++;
 			}
     }
     else{
@@ -548,7 +568,7 @@ sub do_k28_file
 				print_debug("Found strain id of $currentStrain in file $inFilename\n");
 
 				# Initialize report entry for this strain.
-				$reportHash{"$currentStrain"} = [0,0,0];
+				$reportHash{"$currentStrain"} = [0,0,0,0];
 				next;
 			}
 			else{
@@ -582,41 +602,41 @@ sub do_k28_file
 			$realLoci++; # VAAL k28.out file loci is offset by +1
       if (length($2) != 1){
 				if (length($2) == 0){
-					print_debug("Skipping indel line (deletion): $_ ($inFilename)\n");
-					print $indelfile "$currentStrain\tnuc\t$_\n";
+					print_debug("Found indel line (deletion): $_ ($inFilename)\n");
 
 					# Increment deletion count in report
-					$reportHash{"$currentStrain"}[3]++;
+					$reportHash{"$currentStrain"}[2]++;
 				}
         else{
-					print_debug("Skipping indel line (insertion): $_ ($inFilename)\n");
-					print $indelfile "$currentStrain\tnuc\t$_\n";
+					print_debug("Found indel line (insertion): $_ ($inFilename)\n");
 
 					# Increment insertion count in report
-					$reportHash{"$currentStrain"}[2]++;
+					$reportHash{"$currentStrain"}[1]++;
 				}
         print_debug("Skipping indel line: $_ ($inFilename)\n");
         print $indelfile "$currentStrain\tk28\t$_\n";
+				next;
       }
-      elsif (length($3) != 1){
+
+      if (length($3) != 1){
 				if (length($3) == 0){
-					print_debug("Skipping indel line (insertion): $_ ($inFilename)\n");
-					print $indelfile "$currentStrain\tnuc\t$_\n";
+					print_debug("Found indel line (insertion): $_ ($inFilename)\n");
 
 					# Increment deletion count in report
 					$reportHash{"$currentStrain"}[2]++;
 				}
         else{
-					print_debug("Skipping indel line (deletion): $_ ($inFilename)\n");
-					print $indelfile "$currentStrain\tnuc\t$_\n";
+					print_debug("Found indel line (deletion): $_ ($inFilename)\n");
 
 					# Increment insertion count in report
-					$reportHash{"$currentStrain"}[3]++;
+					$reportHash{"$currentStrain"}[1]++;
 				}
         print_debug("Skipping indel line: $_ ($inFilename)\n");
         print $indelfile "$currentStrain\tk28\t$_\n";
+				next;
       }
-      elsif (include_loci($realLoci) == 1){
+
+      if (include_loci($realLoci) == 1){
         print $outfile "$currentStrain\t$realLoci\t$2\n"; # SNP loci file format is (StrainId [TAB] Loci [TAB] Base)
 
 				if ( (exists($refBaseTable{$realLoci})) && ($refBaseTable{$realLoci}[0] ne "$3") ){
@@ -636,6 +656,9 @@ sub do_k28_file
       }
 			else{
         print_debug("Excluded loci $realLoci.\n");
+
+				# Do report - increment exclusion count.
+				$reportHash{"$currentStrain"}[3]++;
 			}
     }
     else{
