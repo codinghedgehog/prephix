@@ -34,17 +34,18 @@
 
 use strict;
 
-my $VERSION="2.4.1";
+my $VERSION="2.4.2";
 
 print "\nPrephix (Pre-Phrecon Input fiXer) v$VERSION\n\n";
 
 if ($#ARGV < 0){
-  print "Usage: $0 input_file1 [input_file2 ...] -batchid <id> [-debug] [-quiet] [-exclude <loci_file>] [-ignore_quality] \n";
+  print "Usage: $0 input_file1 [input_file2 ...] -batchid <id> [-debug] [-quiet] [-exclude <loci_file>] [-ignore_quality] [-tablog]\n";
 	print "-batch <id> is used to create the output filenames for the combined SNP loci and ref files.\n";
 	print "-exclude <loci_file> indicates to prephix to exclude any bases within the loci ranges in the\n";
 	print "<loci_file>.  The file should contain lines of the format 'label,start_loci,end_loci' \n";
 	print "-debug and -quiet flags do what you expect them to do (i.e. verbose output and surpressed output).\n";
 	print "-ignore_quality (currently only applies to VCF files) will process all lines, not just lines with QUALITY=PASS.\n";
+	print "-tablog instructs prephix to print out the summary in tabular format.\n";
   exit 1;
 }
 
@@ -73,6 +74,7 @@ my $input_type="k28";
 my $indelfile;
 my $indelFilename;
 my $ignore_quality="N";
+my $tablog = "N";
 
 my %reportHash;  # Format is {strainId => [# SNPs, # insertions, # deletions, # exclusions]} (key is strainID, value is an array).
 
@@ -99,9 +101,12 @@ while ($arg_num <= $#ARGV){
 			print "Batch id is $batchid\n";
   }
 	elsif ($ARGV[$arg_num] eq "-ignore_quality"){
-			$arg_num++;
 			$ignore_quality="Y";
 			print "Will process all lines, ignoring quality value (only applicable for vcf files).\n";
+  }
+	elsif ($ARGV[$arg_num] eq "-tablog"){
+		  print "Will format summary in tabular formag.\n";
+		  $tablog = "Y";
   }
   elsif ( -r $ARGV[$arg_num] ){
 			push(@inputFileList, $ARGV[$arg_num]);
@@ -223,19 +228,32 @@ print_all("Merged indel file from this run is $indelFilename\n");
 
 
 # Write out stats report.
-print_all("Final report:\n\n");
+print_all("\n=== Final Report ===\n\n");
 
-foreach my $strain (keys %reportHash){
-  print_all("Strain: $strain\n");
-  print_all("SNPs: $reportHash{$strain}[0]\n");
-  print_all("Insertions: $reportHash{$strain}[1]\n");
-  print_all("Deletions: $reportHash{$strain}[2]\n");
-	my $totalIndels =  $reportHash{$strain}[1] + $reportHash{$strain}[2];
-  print_all("Total indels: $totalIndels\n");
-  print_all("Loci excluded: $reportHash{$strain}[3]\n");
-	print_all("\n");
+if ($tablog eq "N"){
+
+	foreach my $strain (keys %reportHash){
+		print_all("Strain: $strain\n");
+		print_all("SNPs: $reportHash{$strain}[0]\n");
+		print_all("Insertions: $reportHash{$strain}[1]\n");
+		print_all("Deletions: $reportHash{$strain}[2]\n");
+		my $totalIndels =  $reportHash{$strain}[1] + $reportHash{$strain}[2];
+		print_all("Total indels: $totalIndels\n");
+		print_all("Loci excluded: $reportHash{$strain}[3]\n");
+		print_all("\n");
+	}
+
 }
+else{
+	# Tabular format requested by -tablog flag.
 
+	print_all("Strain ID\tSNPs\tInserts\tDeletes\tTotal Indels\tLoci Excluded\n");
+	foreach my $strain (keys %reportHash){
+		print_all("$strain\t$reportHash{$strain}[0]\t$reportHash{$strain}[1]\t$reportHash{$strain}[2]\t");
+		my $totalIndels =  $reportHash{$strain}[1] + $reportHash{$strain}[2];
+		print_all("$totalIndels\t$reportHash{$strain}[3]\n");
+	}
+}
 print_all("\nDone.\n");
 
 sub include_loci
