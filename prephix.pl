@@ -29,12 +29,13 @@
 # 7/07/2012 - Andrew Pann - v2.3.1 Added support for VCF files.
 # 11/14/2012 - Andrew Pann - v2.4.0 Added stats reporting.
 # 11/14/2012 - Andrew Pann - v2.4.1 Added total indel count and loci exclusions to stats.  Fixed stats logic.
+# 7/19/2013 - Andrew Pann v2.5.0 Added reporting breakdown for loci exclusions per strain.
 # 
 #
 
 use strict;
 
-my $VERSION="2.4.2";
+my $VERSION="2.5.0";
 
 print "\nPrephix (Pre-Phrecon Input fiXer) v$VERSION\n\n";
 
@@ -77,6 +78,7 @@ my $ignore_quality="N";
 my $tablog = "N";
 
 my %reportHash;  # Format is {strainId => [# SNPs, # insertions, # deletions, # exclusions]} (key is strainID, value is an array).
+my %exclusionReportHash; # Format is {strainID => {Exclusion strainID => count}}
 
 # Process parameters
 $arg_num=0;
@@ -105,7 +107,7 @@ while ($arg_num <= $#ARGV){
 			print "Will process all lines, ignoring quality value (only applicable for vcf files).\n";
   }
 	elsif ($ARGV[$arg_num] eq "-tablog"){
-		  print "Will format summary in tabular formag.\n";
+		  print "Will format summary in tabular format.\n";
 		  $tablog = "Y";
   }
   elsif ( -r $ARGV[$arg_num] ){
@@ -240,8 +242,13 @@ if ($tablog eq "N"){
 		my $totalIndels =  $reportHash{$strain}[1] + $reportHash{$strain}[2];
 		print_all("Total indels: $totalIndels\n");
 		print_all("Loci excluded: $reportHash{$strain}[3]\n");
+
+		foreach my $excludeStrainName (keys %{$exclusionReportHash{"$strain"}}){
+			print_all("* Loci excluded from $excludeStrainName: " . $exclusionReportHash{"$strain"}{"$excludeStrainName"} . "\n");
+		}
 		print_all("\n");
 	}
+
 
 }
 else{
@@ -253,20 +260,29 @@ else{
 		my $totalIndels =  $reportHash{$strain}[1] + $reportHash{$strain}[2];
 		print_all("$totalIndels\t$reportHash{$strain}[3]\n");
 	}
+
+	print "\n";
+
+	foreach my $strain (keys %reportHash){
+		print_all("Loci exclusion summary for $strain:\n");
+		foreach my $excludeStrainName (keys %{$exclusionReportHash{"$strain"}}){
+			print_all("* Loci excluded from $excludeStrainName: " . $exclusionReportHash{"$strain"}{"$excludeStrainName"} . "\n");
+		}
+	}
 }
 print_all("\nDone.\n");
 
-sub include_loci
+sub get_exclusion_loci
 {
   my $loci=$_[0];
   my $label;
 
 	foreach $label (keys %exclusionTable){
 	  if (($loci >= $exclusionTable{$label}[0]) && ($loci <= $exclusionTable{$label}[1])){
-		  return 0;
+		  return $label;
     }
 	}
-	return 1;
+	return "NO_EXCLUSION";
 }
 
 sub get_input_type
@@ -305,6 +321,7 @@ sub do_vcf_file
   my $inFilename = $_[0];
 	my $infile;
 	my $currentStrain="";
+	my $exclude_name="";
 	my $quality="";
 
   open($infile,"<",$inFilename) or die "Unable to open input file $inFilename for reading!  $!\n";
@@ -384,7 +401,8 @@ sub do_vcf_file
 				next;
       }
 
-      if(include_loci($realLoci) == 1){
+			$exclude_name = get_exclusion_loci($realLoci);
+      if ($exclude_name eq "NO_EXCLUSION"){
         print $outfile "$currentStrain\t$realLoci\t$3\n"; # SNP loci file format is (StrainId [TAB] Loci [TAB] Base)
 
 				if ( (exists($refBaseTable{$realLoci})) && ($refBaseTable{$realLoci}[0] ne "$2") ){
@@ -407,6 +425,14 @@ sub do_vcf_file
 
 				# Do report - increment exclusion count.
 				$reportHash{"$currentStrain"}[3]++;
+
+				# Do tally in the exclusion report.
+				if ( exists($exclusionReportHash{"$currentStrain"}) ){
+					$exclusionReportHash{"$currentStrain"}{"$exclude_name"}++;
+				}
+				else{
+					$exclusionReportHash{"$currentStrain"}{"$exclude_name"} = 1;
+				}	
 			}
     }
     else{
@@ -428,6 +454,7 @@ sub do_nucmer_file
   my $inFilename = $_[0];
 	my $infile;
 	my $currentStrain="";
+	my $exclude_name="";
 
   open($infile,"<",$inFilename) or die "Unable to open input file $inFilename for reading!  $!\n";
 
@@ -524,7 +551,8 @@ sub do_nucmer_file
 				next;
       }
 
-      if(include_loci($realLoci) == 1){
+			$exclude_name = get_exclusion_loci($realLoci);
+      if($exclude_name eq "NO_EXCLUSION"){
         print $outfile "$currentStrain\t$realLoci\t$3\n"; # SNP loci file format is (StrainId [TAB] Loci [TAB] Base)
 
 				if ( (exists($refBaseTable{$realLoci})) && ($refBaseTable{$realLoci}[0] ne "$2") ){
@@ -547,6 +575,14 @@ sub do_nucmer_file
 
 				# Do report - increment exclusion count.
 				$reportHash{"$currentStrain"}[3]++;
+
+				# Do tally in the exclusion report.
+				if ( exists($exclusionReportHash{"$currentStrain"}) ){
+					$exclusionReportHash{"$currentStrain"}{"$exclude_name"}++;
+				}
+				else{
+					$exclusionReportHash{"$currentStrain"}{"$exclude_name"} = 1;
+				}	
 			}
     }
     else{
@@ -567,6 +603,7 @@ sub do_k28_file
   my $inFilename = $_[0];
 	my $infile;
 	my $currentStrain;
+	my $exclude_name="";
 
   open($infile,"<",$inFilename) or die "Unable to open input file $inFilename for reading!  $!\n";
 
@@ -654,7 +691,8 @@ sub do_k28_file
 				next;
       }
 
-      if (include_loci($realLoci) == 1){
+			$exclude_name = get_exclusion_loci($realLoci);
+      if ($exclude_name eq "NO_EXCLUSION"){
         print $outfile "$currentStrain\t$realLoci\t$2\n"; # SNP loci file format is (StrainId [TAB] Loci [TAB] Base)
 
 				if ( (exists($refBaseTable{$realLoci})) && ($refBaseTable{$realLoci}[0] ne "$3") ){
@@ -677,6 +715,14 @@ sub do_k28_file
 
 				# Do report - increment exclusion count.
 				$reportHash{"$currentStrain"}[3]++;
+
+				# Do tally in the exclusion report.
+				if ( exists($exclusionReportHash{"$currentStrain"}) ){
+					$exclusionReportHash{"$currentStrain"}{"$exclude_name"}++;
+				}
+				else{
+					$exclusionReportHash{"$currentStrain"}{"$exclude_name"} = 1;
+				}	
 			}
     }
     else{
