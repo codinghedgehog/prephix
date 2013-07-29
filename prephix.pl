@@ -30,12 +30,13 @@
 # 11/14/2012 - Andrew Pann - v2.4.0 Added stats reporting.
 # 11/14/2012 - Andrew Pann - v2.4.1 Added total indel count and loci exclusions to stats.  Fixed stats logic.
 # 7/19/2013 - Andrew Pann v2.5.0 Added reporting breakdown for loci exclusions per strain.
+# 7/20/2013 - Andrew Pann v2.5.1 Added PhenoLink export option.
 # 
 #
 
 use strict;
 
-my $VERSION="2.5.0";
+my $VERSION="2.5.1";
 
 print "\nPrephix (Pre-Phrecon Input fiXer) v$VERSION\n\n";
 
@@ -47,6 +48,7 @@ if ($#ARGV < 0){
 	print "-debug and -quiet flags do what you expect them to do (i.e. verbose output and surpressed output).\n";
 	print "-ignore_quality (currently only applies to VCF files) will process all lines, not just lines with QUALITY=PASS.\n";
 	print "-tablog instructs prephix to print out the summary in tabular format.\n";
+	print "-export_phenolink instructs prephix to also write out a PhenoLink compatible output file.\n";
   exit 1;
 }
 
@@ -58,6 +60,9 @@ my $outfile;
 my $outFilename;
 my $excludeFile;
 my $excludeFilename;
+my $exportPhenoLink="N";
+my $exportPhenoLinkFilename;
+my $exportPhenoLinkFile;
 my $logfile;
 my $i=0;
 my $fileCount=0;
@@ -76,9 +81,12 @@ my $indelfile;
 my $indelFilename;
 my $ignore_quality="N";
 my $tablog = "N";
+my $phenoStrain;
+
 
 my %reportHash;  # Format is {strainId => [# SNPs, # insertions, # deletions, # exclusions]} (key is strainID, value is an array).
 my %exclusionReportHash; # Format is {strainID => {Exclusion strainID => count}}
+my %phenoLinkStrainReportHash; # Format is {strainID => {Loci => Base}}
 
 # Process parameters
 $arg_num=0;
@@ -109,6 +117,10 @@ while ($arg_num <= $#ARGV){
 	elsif ($ARGV[$arg_num] eq "-tablog"){
 		  print "Will format summary in tabular format.\n";
 		  $tablog = "Y";
+  }
+	elsif ($ARGV[$arg_num] eq "-export_phenolink"){
+		  print "Will export a PhenoLink file.\n";
+		  $exportPhenoLink = "Y";
   }
   elsif ( -r $ARGV[$arg_num] ){
 			push(@inputFileList, $ARGV[$arg_num]);
@@ -144,6 +156,12 @@ open($reffile,">","$refFilename") or die "Unable to open output reference base f
 
 $indelFilename = "$batchid.indel";
 open($indelfile,">","$indelFilename") or die "Unable to open output indel file $indelFilename for writing!  $!\n";
+
+if ($exportPhenoLink eq "Y"){
+  $exportPhenoLinkFilename = "$batchid.phenolink.txt";
+  open($exportPhenoLinkFile,">","$exportPhenoLinkFilename") or die "Unable to open PhenoLink export file $exportPhenoLinkFilename for writing!  $!\n";
+}
+
 
 if ($excludeFilename ne ""){
   print_all("Reading exclusion list from $excludeFilename.\n");
@@ -220,6 +238,37 @@ foreach $loci (sort {$a <=> $b} keys %refBaseTable){
 }
 
 print_all("Done.\n");
+
+if ($exportPhenoLink eq "Y"){
+
+	print_all("Exporting PhenoLink file...");
+
+  # Write out the column headings => STRAIN_ID TAB LOCUS_1 TAB LOCUS_2 ...
+	print $exportPhenoLinkFile "Strain_ID";
+	foreach $loci (sort {$a <=> $b} keys %refBaseTable){
+		print $exportPhenoLinkFile "\t$refBaseTable{$loci}[0]_$loci";
+	}
+  print $exportPhenoLinkFile "\n";
+
+  # For each strain, create a row in the export PhenoLink file.
+
+  foreach $phenoStrain (keys %phenoLinkStrainReportHash){
+		print $exportPhenoLinkFile "$phenoStrain";
+		foreach $loci (sort {$a <=> $b} keys %refBaseTable){
+			if (exists($phenoLinkStrainReportHash{$phenoStrain}{$loci})){
+				print $exportPhenoLinkFile "\t1";
+			}
+			else{
+				print $exportPhenoLinkFile "\t0";
+			}
+		}
+		print $exportPhenoLinkFile "\n";
+  }
+
+  close($exportPhenoLinkFile); 
+
+  print_all("Done.\n");
+}
 
 close($outfile);
 close($reffile);
@@ -418,6 +467,11 @@ sub do_vcf_file
 
 					# Do report - increment SNP count.
 					$reportHash{"$currentStrain"}[0]++;
+
+					# Do PhenoLink report if needed.
+					if ($exportPhenoLink eq "Y"){
+					 	$phenoLinkStrainReportHash{$currentStrain}{$realLoci}=$2;
+					}
 				}
       }
 			else{
@@ -568,6 +622,11 @@ sub do_nucmer_file
 
 					# Do report - increment SNP count.
 					$reportHash{"$currentStrain"}[0]++;
+
+          # Do PhenoLink report if needed.
+          if ($exportPhenoLink eq "Y"){
+            $phenoLinkStrainReportHash{$currentStrain}{$realLoci}=$2;
+          }
 				}
       }
 			else{
@@ -708,6 +767,11 @@ sub do_k28_file
 
 					# Do report - increment SNP count.
 					$reportHash{"$currentStrain"}[0]++;
+
+          # Do PhenoLink report if needed.
+          if ($exportPhenoLink eq "Y"){
+            $phenoLinkStrainReportHash{$currentStrain}{$realLoci}=$2;
+          }
 				}
       }
 			else{
