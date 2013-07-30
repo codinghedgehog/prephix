@@ -239,6 +239,7 @@ if ($exportPhenoLink eq "Y"){
 	}
   else{	
 		system("./pre2phe.py --ref $refFilename --snp $outFilename --out $batchid.phenolink.txt");
+		print_all("PhenoLink export file is $batchid.phenolink.txt\n");
 	}
 }
 

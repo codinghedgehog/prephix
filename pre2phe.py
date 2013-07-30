@@ -107,3 +107,5 @@ finally:
     outfile.close()
 
 print "done.\n"
+
+print "Final output file is {0}\n".format(args.out[0]);
