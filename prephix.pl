@@ -233,9 +233,13 @@ print_all("Done.\n");
 
 if ($exportPhenoLink eq "Y"){
 	print_all("Exporting PhenoLink file...");
-  my $phenoOutput = `pre2phe.py --ref $refFilename --snp $outFilename --out $batchid.phenolink.txt`;
-	print_all($phenoOutput);
 
+	if ( ! -x "./pre2phe.py" ){
+		print_all("*** ERROR: Cannot find external script pre2phe.py to generate PhenoLink output!\n");
+	}
+  else{	
+		system("./pre2phe.py --ref $refFilename --snp $outFilename --out $batchid.phenolink.txt");
+	}
 }
 
 close($outfile);
