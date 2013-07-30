@@ -30,7 +30,7 @@
 # 11/14/2012 - Andrew Pann - v2.4.0 Added stats reporting.
 # 11/14/2012 - Andrew Pann - v2.4.1 Added total indel count and loci exclusions to stats.  Fixed stats logic.
 # 7/19/2013 - Andrew Pann v2.5.0 Added reporting breakdown for loci exclusions per strain.
-# 7/20/2013 - Andrew Pann v2.5.1 Added PhenoLink export option.
+# 7/20/2013 - Andrew Pann v2.5.1 Added PhenoLink export option. This uses the pre2phe.py script, called externally.
 # 
 #
 
@@ -61,8 +61,6 @@ my $outFilename;
 my $excludeFile;
 my $excludeFilename;
 my $exportPhenoLink="N";
-my $exportPhenoLinkFilename;
-my $exportPhenoLinkFile;
 my $logfile;
 my $i=0;
 my $fileCount=0;
@@ -157,12 +155,6 @@ open($reffile,">","$refFilename") or die "Unable to open output reference base f
 $indelFilename = "$batchid.indel";
 open($indelfile,">","$indelFilename") or die "Unable to open output indel file $indelFilename for writing!  $!\n";
 
-if ($exportPhenoLink eq "Y"){
-  $exportPhenoLinkFilename = "$batchid.phenolink.txt";
-  open($exportPhenoLinkFile,">","$exportPhenoLinkFilename") or die "Unable to open PhenoLink export file $exportPhenoLinkFilename for writing!  $!\n";
-}
-
-
 if ($excludeFilename ne ""){
   print_all("Reading exclusion list from $excludeFilename.\n");
 
@@ -240,34 +232,10 @@ foreach $loci (sort {$a <=> $b} keys %refBaseTable){
 print_all("Done.\n");
 
 if ($exportPhenoLink eq "Y"){
-
 	print_all("Exporting PhenoLink file...");
+  my $phenoOutput = `pre2phe.py --ref $refFilename --snp $outFilename --out $batchid.phenolink.txt`;
+	print_all($phenoOutput);
 
-  # Write out the column headings => STRAIN_ID TAB LOCUS_1 TAB LOCUS_2 ...
-	print $exportPhenoLinkFile "Strain_ID";
-	foreach $loci (sort {$a <=> $b} keys %refBaseTable){
-		print $exportPhenoLinkFile "\t$refBaseTable{$loci}[0]_$loci";
-	}
-  print $exportPhenoLinkFile "\n";
-
-  # For each strain, create a row in the export PhenoLink file.
-
-  foreach $phenoStrain (keys %phenoLinkStrainReportHash){
-		print $exportPhenoLinkFile "$phenoStrain";
-		foreach $loci (sort {$a <=> $b} keys %refBaseTable){
-			if (exists($phenoLinkStrainReportHash{$phenoStrain}{$loci})){
-				print $exportPhenoLinkFile "\t1";
-			}
-			else{
-				print $exportPhenoLinkFile "\t0";
-			}
-		}
-		print $exportPhenoLinkFile "\n";
-  }
-
-  close($exportPhenoLinkFile); 
-
-  print_all("Done.\n");
 }
 
 close($outfile);
@@ -468,10 +436,6 @@ sub do_vcf_file
 					# Do report - increment SNP count.
 					$reportHash{"$currentStrain"}[0]++;
 
-					# Do PhenoLink report if needed.
-					if ($exportPhenoLink eq "Y"){
-					 	$phenoLinkStrainReportHash{$currentStrain}{$realLoci}=$2;
-					}
 				}
       }
 			else{
@@ -623,10 +587,6 @@ sub do_nucmer_file
 					# Do report - increment SNP count.
 					$reportHash{"$currentStrain"}[0]++;
 
-          # Do PhenoLink report if needed.
-          if ($exportPhenoLink eq "Y"){
-            $phenoLinkStrainReportHash{$currentStrain}{$realLoci}=$2;
-          }
 				}
       }
 			else{
@@ -768,10 +728,6 @@ sub do_k28_file
 					# Do report - increment SNP count.
 					$reportHash{"$currentStrain"}[0]++;
 
-          # Do PhenoLink report if needed.
-          if ($exportPhenoLink eq "Y"){
-            $phenoLinkStrainReportHash{$currentStrain}{$realLoci}=$2;
-          }
 				}
       }
 			else{
