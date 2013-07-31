@@ -3,8 +3,13 @@
 # Prephix 2 SNP Effect Converter
 #
 # This script takes the ref and snp output files from a prephix run and generates an SNP Effect compliant input file.
+# SNP Effect file format is: SNPlocus<tab>sample=snpbase<tab>ref=refbase
+# SNP Effect doesn't care about strain ids so if two strains share a locus but have different bases, then two lines will
+# be generated, with identical locus and ref values but different sample values.
 #
 # Usage: prephix2snpeffect.py ref_file snp_file
+#
+# 7/31/2013 -- VERSION 2.0.0 - Moved to Sqlite3 datastore and query processing, instead of dictionaries.
 
 import sys
 import os
@@ -13,8 +18,9 @@ import argparse
 import string
 import cStringIO
 import math
+import sqlite3
 
-VERSION = '1.0.0'
+VERSION = '2.0.0'
 
 # MAIN #
 
@@ -55,29 +61,37 @@ except:
     print "Unexpected error while opening SNP file:", sys.exc_info()[0]
     raise
 
+# Setup in-memory database.
+dbconn = sqlite3.connect(':memory:')
+dbcursor = dbconn.cursor()
+
+# Create the table for the snp file data (COLUMNS: strainid, locus, base)
+dbcursor.execute('''CREATE TABLE SNP_DATA (strainid text, locus integer, base text NOT NULL, PRIMARY KEY(strainid,locus))''')
+
+# Create indexes.
+dbcursor.execute('''CREATE INDEX SNP_DATA_LOCUS_IDX ON SNP_DATA (locus)''')
+
+dbconn.commit()
 
 print "Reading SNP file data: {0}...".format(snpFilename)
-snpData = {}
-for snpLine in snpFile:
-    # Expect the prephix snp output file to be in format: STRAIN_ID\tLOCUS\tSNP_BASE
-    snpLineMatch = re.match("^[^\t]+\t(?P<locus>\d+)\t(?P<snpBase>[ACGT])$",snpLine)
-    if snpLineMatch:
-        # Quick and dirty implementation here - store the SNP information in a dictionary.  Key is the locus, and value is an array
-        # of SNP bases at that location across all the SNP strains.
-        locus = snpLineMatch.group("locus")
-        snpBase = snpLineMatch.group("snpBase")
-        if locus in snpData.keys():
-            # Don't store SNP base if the same base has already been recorded at that locus.
-            if not snpBase in snpData[locus]:
-                snpData[locus].append(snpBase)
+
+with dbconn:
+    for snpLine in snpFile:
+        # Expect the prephix snp output file to be in format: STRAIN_ID\tLOCUS\tSNP_BASE
+        snpLineMatch = re.match("^(?P<strainid>[^\t]+)\t(?P<locus>\d+)\t(?P<snpBase>[ACGT])$",snpLine)
+        if snpLineMatch:
+            # Database implementation here - store the SNP information in the SNP_DATA table.
+            strainid = snpLineMatch.group("strainid")
+            locus = snpLineMatch.group("locus")
+            snpBase = snpLineMatch.group("snpBase")
+            dbconn.execute('''INSERT INTO SNP_DATA (strainid,locus,base) VALUES (?,?,?)''',(strainid,locus,snpBase))
         else:
-            snpData[locus] = [snpBase]
-    else:
-        print "*** ERROR: Bad line in {0}! Not a prephix SNP file?".format(snpFilename)
-        print "Cannot parse line: {0}".format(snpLine)
-        sys.exit(1)
+            print "*** ERROR: Bad line in {0}! Not a prephix SNP file?".format(snpFilename)
+            print "Cannot parse line: {0}".format(snpLine)
+            sys.exit(1)
 
 snpFile.close()
+
 
 print "Reading ref file data and generating output file: {0}".format(outputFilename)
 
@@ -108,15 +122,24 @@ for refLine in refFile:
     if refLineMatch:
         locus = refLineMatch.group("locus")
         refBase = refLineMatch.group("refBase")
-        if locus in snpData.keys():
+        dbcursor.execute('''SELECT base FROM SNP_DATA WHERE LOCUS = ?''',(locus,))
+
+        got_results = False
+
+        for row in dbcursor.fetchall():
+            got_results = True
+            snpBase = str(row[0])
+
+            # SNP Effect file format has a -1 offset from actual locus value.
+            snpEffectLocus = int(locus) - 1
+            
             # SNP Effect file format is: SNPlocus<tab>sample=snpbase<tab>ref=refbase
-            for snpBase in snpData[locus]:
-                locus = int(locus)
-                locus -= 1 # SNP Effect file format has a -1 offset from actual locus value.
-                outFile.write("{0}\tsample={1}\tref={2}\n".format(locus,snpBase,refBase))
-        else:
+            outFile.write("{0}\tsample={1}\tref={2}\n".format(snpEffectLocus,snpBase,refBase))
+
+        if not got_results:
             print "*** ERROR: No SNP base found for locus {0} in ref file!".format(locus)
             sys.exit(1)
+
     else:
         print "*** ERROR: Bad line in {0}! Not a prephix ref file?".format(refFilename)
         print "Cannot parse line: {0}".format(refLine)
@@ -125,5 +148,7 @@ for refLine in refFile:
 
 refFile.close()
 outFile.close()
+
+dbconn.close()
 
 print "Done.  SNP Effect output file is {0}".format(outputFilename)
