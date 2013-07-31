@@ -7,17 +7,18 @@
 # common SNP Loci between the compared Strains and then removes the SNP Loci
 # that are common across the exclude Strains.
 #
+# 7/31/2013 -- V1.1 Added output file name parameter and added more reporting stats.
 
 import os
 import sys
 import re
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 print "SNP Comparator v{0}\n".format(VERSION)
 
 if len(sys.argv) < 2:
-    print "Usage: {0} --snpfile <snpfile> --compare <compare strain 1> <compare strain 2> ... [--exclude <exclude strain 1> <exclude strain 2> ...]\n".format(sys.argv[0])
+    print "Usage: {0} --snpfile <snpfile> --compare <compare strain 1> <compare strain 2> ... [--exclude <exclude strain 1> <exclude strain 2> ...] [--outfile <filename>]\n".format(sys.argv[0])
     sys.exit(1)
 
 mode=""
@@ -39,6 +40,9 @@ for arg in sys.argv:
     elif arg == "--snpfile":
         mode="snpfile"
         continue
+    elif arg == "--outfile":
+        mode="outfile"
+        continue
 
     if mode == "compare":
         compareList.append(arg)
@@ -48,8 +52,13 @@ for arg in sys.argv:
         continue
     elif mode == "snpfile":
         snpFilename = arg
-        outFilename = "{0}.compared.txt".format(snpFilename)
         continue
+    elif mode == "outfile":
+        outFilename = arg
+        continue
+
+if outFilename == "":
+    outFilename = "{0}.compared.txt".format(snpFilename)
 
 # Track which input strains have been included or excluded -- used for warning
 # if some strains were not found in snp file
@@ -168,6 +177,18 @@ try:
 
     for snpLoci in finalList:
         outFile.write("{0}\n".format(snpLoci))
+
+    outFile.write("\nCount of common SNP loci from comparison set: {0}\n".format(len(commonSet)))
+    outFile.write("Count of common SNP loci from exclusion set: {0}\n".format(len(exclusionSet)))
+    outFile.write("FINAL count of common SNP loci (after exclusions): {0}\n".format(len(finalSet)))
+
+    if len(unusedCompareStrains) > 0:
+        outFile.write("\n*** WARNING: Some comparison strains were not found in snp file: {0}".format(', '.join(unusedCompareStrains)))
+
+    if len(unusedExcludeStrains) > 0:
+        outFile.write("\n*** WARNING: Some exclusion strains were not found in snp file: {0}".format(', '.join(unusedExcludeStrains)))
+
+    outFile.write("\n")
 finally:
     outFile.close()
 
@@ -176,6 +197,7 @@ print "\nDone.\n"
 print "Count of common SNP loci from comparison set: {0}".format(len(commonSet))
 print "Count of common SNP loci from exclusion set: {0}".format(len(exclusionSet))
 print "FINAL count of common SNP loci (after exclusions): {0}\n".format(len(finalSet))
+
 
 if len(unusedCompareStrains) > 0:
     print "*** WARNING: Some comparison strains were not found in snp file: {0}".format(', '.join(unusedCompareStrains))
