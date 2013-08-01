@@ -8,6 +8,7 @@
 # that are common across the exclude Strains.
 #
 # 7/31/2013 -- V1.1 Added output file name parameter and added more reporting stats.
+# 7/31/2013 -- V1.2 Fixed sorting.
 
 import os
 import sys
@@ -172,11 +173,12 @@ try:
     finalSet = commonSet.difference(exclusionSet)
 
     # Write out the final common, filtered SNP loci.
-    finalList = [ x for x in finalSet ]
+    # Split the locus and base up into distinct elements for sorting. Note we get a list of lists like [locus, base].
+    finalList = [ [x.split("\t")[0],x.split("\t")[1]] for x in finalSet ]
     finalList.sort()
 
     for snpLoci in finalList:
-        outFile.write("{0}\n".format(snpLoci))
+        outFile.write("{0}\t{1}\n".format(snpLoci[0],snpLoci[1]))
 
     outFile.write("\nCount of common SNP loci from comparison set: {0}\n".format(len(commonSet)))
     outFile.write("Count of common SNP loci from exclusion set: {0}\n".format(len(exclusionSet)))
