@@ -34,6 +34,7 @@ progname = os.path.abspath(sys.argv[0])
 # Define arguments.
 argParser.add_argument("ref_file",help="The prephix written reference output file.")
 argParser.add_argument("snp_file",help="The prephix written snp file output.")
+argParser.add_argument("--dbfile",nargs=1,help="The database filename.")
 argParser.add_argument("-d","--debug",action="store_true",help="Debug mode.")
 
 args = argParser.parse_args()
@@ -62,7 +63,15 @@ except:
     raise
 
 # Setup in-memory database.
-dbconn = sqlite3.connect(':memory:')
+if args.dbfile == None:
+    dbconn = sqlite3.connect(':memory:')
+else:
+    dbfilename = args.dbfile[0]
+    if os.path.isfile(dbfilename):
+        print "*** ERROR database file {0} already exists.  Please remove or use a different filename.\n".format(dbfilename)
+        sys.exit(1)
+    else:
+        dbconn = sqlite3.connect(dbfilename)
 dbcursor = dbconn.cursor()
 
 # Create the table for the snp file data (COLUMNS: strainid, locus, base)
@@ -74,6 +83,7 @@ dbcursor.execute('''CREATE INDEX SNP_DATA_LOCUS_IDX ON SNP_DATA (locus)''')
 dbconn.commit()
 
 print "Reading SNP file data: {0}...".format(snpFilename)
+sys.stdout.flush()
 
 with dbconn:
     for snpLine in snpFile:
@@ -94,6 +104,7 @@ snpFile.close()
 
 
 print "Reading ref file data and generating output file: {0}".format(outputFilename)
+sys.stdout.flush()
 
 try:
     refFile = open(refFilename,"r")
