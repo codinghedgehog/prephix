@@ -31,12 +31,13 @@
 # 11/14/2012 - Andrew Pann - v2.4.1 Added total indel count and loci exclusions to stats.  Fixed stats logic.
 # 7/19/2013 - Andrew Pann v2.5.0 Added reporting breakdown for loci exclusions per strain.
 # 7/20/2013 - Andrew Pann v2.5.1 Added PhenoLink export option. This uses the pre2phe.py script, called externally.
+# 7/31/2013 - Andrew Pann v2.5.2 Fixed insertion/deletion reporting for k28 files.
 # 
 #
 
 use strict;
 
-my $VERSION="2.5.1";
+my $VERSION="2.5.2";
 
 print "\nPrephix (Pre-Phrecon Input fiXer) v$VERSION\n\n";
 
@@ -702,13 +703,13 @@ sub do_k28_file
 					print_debug("Found indel line (insertion): $_ ($inFilename)\n");
 
 					# Increment deletion count in report
-					$reportHash{"$currentStrain"}[2]++;
+					$reportHash{"$currentStrain"}[1]++;
 				}
         else{
 					print_debug("Found indel line (deletion): $_ ($inFilename)\n");
 
 					# Increment insertion count in report
-					$reportHash{"$currentStrain"}[1]++;
+					$reportHash{"$currentStrain"}[2]++;
 				}
         print_debug("Skipping indel line: $_ ($inFilename)\n");
         print $indelfile "$currentStrain\tk28\t$_\n";
