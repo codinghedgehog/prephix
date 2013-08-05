@@ -18,3 +18,39 @@ Recognized input file formats: k28.out (VAAL), NUCMER, VCF
 
 You may mix input file types within a single run/batch.
 
+
+=== ADDITIONAL SCRIPTS ===
+
+Additional scripts exist in this repository, mainly utility and helper scripts that work on the outfiles from prehix.
+
+--- Prephix 2 SNP Effect Converter ---
+
+Usage: prephix2snpeffect.py ref_file snp_file
+
+This script takes the ref and snp output files from a prephix run and generates an SNP Effect compliant input file.
+SNP Effect file format is: SNPlocus<tab>sample=snpbase<tab>ref=refbase
+
+SNP Effect doesn't care about strain ids so if two strains share a locus but have different bases, then two lines will
+be generated, with identical locus and ref values but different sample values.
+
+
+--- Prephix to PhenoLink Generator ---
+
+Usage: pre2phe.py -ref <ref base file> -snp <snp file> -out <PhenoLink output file>
+
+Takes in a one SNP loci output file (possibly containing multiple strains) and one reference base file generated from prephix,
+and generates a PhenoLink export file.
+
+The PhenoLink export file is a tab-delimited file, with columns of all Loci Names (in this case RefBase_Locus_SnpBase)
+and rows of StrainIDs with 1's indicating the presence of that Locus Name in its strain, and 0 otherwise.
+
+
+--- SNP Comparator ---
+
+Usage: snp_compare.py --snpfile <snpfile> --compare <compare strain 1> <compare strain 2> ... [--exclude <exclude strain 1> <exclude strain 2> ...] [--outfile <filename>]
+
+Takes in an SNP file (formatted like the snp file output from prephix) and a
+list of strain IDs to compare and/or exclude.  SNP Comparator finds all the
+common SNP Loci between the compared Strains and then removes the SNP Loci
+that are common across the exclude Strains.
+
