@@ -1,6 +1,7 @@
 #!/usr/bin/python
 #
 # Prephix 2 SNP Effect Converter
+# by Andrew Pann
 #
 # This script takes the ref and snp output files from a prephix run and generates an SNP Effect compliant input file.
 # SNP Effect file format is: SNPlocus<tab>sample=snpbase<tab>ref=refbase
@@ -10,6 +11,7 @@
 # Usage: prephix2snpeffect.py ref_file snp_file
 #
 # 7/31/2013 -- VERSION 2.0.0 - Moved to Sqlite3 datastore and query processing, instead of dictionaries.
+# 7/31/2013 -- VERSION 2.0.1 - Add better error output on database insert failure.
 
 import sys
 import os
@@ -20,7 +22,7 @@ import cStringIO
 import math
 import sqlite3
 
-VERSION = '2.0.0'
+VERSION = '2.0.1'
 
 # MAIN #
 
@@ -94,7 +96,10 @@ with dbconn:
             strainid = snpLineMatch.group("strainid")
             locus = snpLineMatch.group("locus")
             snpBase = snpLineMatch.group("snpBase")
-            dbconn.execute('''INSERT INTO SNP_DATA (strainid,locus,base) VALUES (?,?,?)''',(strainid,locus,snpBase))
+            try:
+                dbconn.execute('''INSERT INTO SNP_DATA (strainid,locus,base) VALUES (?,?,?)''',(strainid,locus,snpBase))
+            except:
+                print "*** DATABASE error inserting {} {} {}".format(strainid,locus,base)
         else:
             print "*** ERROR: Bad line in {0}! Not a prephix SNP file?".format(snpFilename)
             print "Cannot parse line: {0}".format(snpLine)
