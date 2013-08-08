@@ -99,7 +99,8 @@ with dbconn:
             try:
                 dbconn.execute('''INSERT INTO SNP_DATA (strainid,locus,base) VALUES (?,?,?)''',(strainid,locus,snpBase))
             except:
-                print "*** DATABASE error inserting {} {} {}".format(strainid,locus,base)
+                print "*** DATABASE error inserting {} {} {}".format(strainid,locus,snpBase)
+                raise 
         else:
             print "*** ERROR: Bad line in {0}! Not a prephix SNP file?".format(snpFilename)
             print "Cannot parse line: {0}".format(snpLine)
