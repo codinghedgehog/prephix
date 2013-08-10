@@ -10,24 +10,24 @@ import sys
 # Public Methods
 #
 def getSNPFileReader(fileName,filterQuality=True):
-'''
-This is basically an factory method that takes
-in an SNP input file name for Prephix, determines
-the file format, and returns an appropriate 
-reader/iterator object for that file.
+    '''
+    This is basically an factory method that takes
+    in an SNP input file name for Prephix, determines
+    the file format, and returns an appropriate 
+    reader/iterator object for that file.
 
-SNP File Reader/Iterator objects are expected
-to support iteration behavior (i.e. "for...in" statements)
-that returns an SNPDataLine object with each call. 
+    SNP File Reader/Iterator objects are expected
+    to support iteration behavior (i.e. "for...in" statements)
+    that returns an SNPDataLine object with each call. 
 
-Parameters:
-    fileName = The SNP input file name.  Assumes data for one strain per file.
+    Parameters:
+        fileName = The SNP input file name.  Assumes data for one strain per file.
 
-    filterQuality = (OPTIONAL) Used by VCF file reader for filtering on quality (default is to return only PASS quality).
-        Setting filterQuality to False will have the reader return all lines without regard to quality.
+        filterQuality = (OPTIONAL) Used by VCF file reader for filtering on quality (default is to return only PASS quality).
+            Setting filterQuality to False will have the reader return all lines without regard to quality.
 
 
-'''
+    '''
     fileFormat = "unknown"
 
     # Define regexes for recognizing the file type based on its contents.
@@ -36,7 +36,7 @@ Parameters:
     vcfRe = re.compile("^##fileformat=VCF")
 
     with open(fileName,"r") as inputFile:
-        for line in inputfile:
+        for line in inputFile:
             if k28Re.match(line):
                 fileFormat = "k28"
                 break
@@ -50,7 +50,7 @@ Parameters:
         return K28FileReader(fileName)
     elif fileFormat == "nucmer":
         return NucmerFileReader(fileName)
-    elif fileFormat = "vcf":
+    elif fileFormat == "vcf":
         return VCFFileReader(fileName,filterQuality)
     else:
         raise NotImplementedError
@@ -76,7 +76,7 @@ class SNPFileReadError(Exception):
 #
 # Classes
 #
-class SNPFileReader:
+class SNPFileReader(object):
     '''
     This is an abstract base class that defines the interface
     that SNPFileReader objects are expected to support.
@@ -111,6 +111,7 @@ class SNPDataLine:
         self.isIndel = isIndel       # Is this line an indel?
         self.isInsert = isInsert     # If this is an indel, is it an insertion?
         self.isDelete = isDelete     # If this is an indel, is it a deletion?
+        self.lineNumber = 0          # The line number in the snp file associated with this data line object.
     
 
 #
@@ -127,12 +128,12 @@ class K28FileReader(SNPFileReader):
     strainRe = re.compile ("^#(?P<strainid>.+?)\/")
 
     def __init__(self,fileName):
-        super(K28FileReader,self).__init__(self,fileName)
+        super(K28FileReader,self).__init__(fileName)
         self.fileFormat = "k28"
         self.lineNumber = 0
 
         # Find the strainID
-        fh = open(fileName,"r")
+        fh = open(self.fileName,"r")
 
         # Get strain ID from header comments: #<strain_id>/<reference_genome_filename>
         for line in fh:
@@ -149,7 +150,7 @@ class K28FileReader(SNPFileReader):
         Concrete implementation of iterator protocol (as a generator) to get the next line of data.
         '''
         # Open the file and skip to the first line of data.
-        fh = open(fileName,"r")
+        fh = open(self.fileName,"r")
         for line in fh:
             self.lineNumber += 1
             # Ignore other comments in the file (lines starting with #).  This includes the header comments.
@@ -167,10 +168,10 @@ class K28FileReader(SNPFileReader):
             #
             # Some times sample= and ref= may have no value, so match for [ATCG] and check for length 1.
             # If it is not length 1, then it is either blank or have more than one base, so skip as indel.
-            lineMatch = k28lineRe.match(line)
+            lineMatch = K28FileReader.k28lineRe.match(line)
             if lineMatch:
                 # VAAL k28.out file loci is offset by +1
-                realLocus = int(lineMatch.group(locus)) + 1
+                realLocus = int(lineMatch.group('locus')) + 1
                 snpBase = lineMatch.group('sample_base')
                 refBase = lineMatch.group('ref_base')
 
@@ -213,12 +214,12 @@ class NucmerFileReader(SNPFileReader):
     nucmerlineRe = re.compile("^(?P<locus>[0-9]+)\t(?P<ref_base>[ATCG]*)\t(?P<sample_base>[ATCG]*)\t[0-9]+")
 
     def __init__(self,fileName):
-        super(NucmerFileReader,self).__init__(self,fileName)
+        super(NucmerFileReader,self).__init__(fileName)
         self.fileFormat = "nucmer"
         self.lineNumber = 0
 
         # Find the strainID
-        fh = open(fileName,"r")
+        fh = open(self.fileName,"r")
 
         # Get strain ID from header line: /path/to/reference/file /path/to/query/file
         # Assuming Strain ID is the query file name
@@ -235,7 +236,7 @@ class NucmerFileReader(SNPFileReader):
         Concrete implementation of iterator protocol (as a generator) to get the next line of data.
         '''
         # Open the file and skip to the first line of data.
-        fh = open(fileName,"r")
+        fh = open(self.fileName,"r")
         foundHeader = False
         for line in fh:
             self.lineNumber += 1
@@ -262,9 +263,9 @@ class NucmerFileReader(SNPFileReader):
             # Some times one or another SUB may have no value, so match for [ATCG] and check for length 1.
             # If it is not length 1, then it is either blank or have more than one base, so skip as indel.
 
-            lineMatch = nucmerlineRe.match(line)
+            lineMatch = NucmerFileReader.nucmerlineRe.match(line)
             if lineMatch:
-                realLocus = int(lineMatch.group(locus))
+                realLocus = int(lineMatch.group('locus'))
                 snpBase = lineMatch.group('sample_base')
                 refBase = lineMatch.group('ref_base')
 
@@ -309,13 +310,13 @@ class VCFFileReader(SNPFileReader):
         '''
         filterQuality parameter is a flag to indicate if it should filter data lines having only PASS quality filter values.
         '''
-        super(NucmerFileReader,self).__init__(self,fileName)
+        super(VCFFileReader,self).__init__(fileName)
         self.fileFormat = "vcf"
         self.lineNumber = 0
         self.filterQuality = filterQuality
 
         # Set the strainID to the filename for now.
-        self.strainID = os.file.basename(fileName)
+        self.strainID = os.path.basename(fileName)
 
 
     def __iter__(self):
@@ -323,7 +324,7 @@ class VCFFileReader(SNPFileReader):
         Concrete implementation of iterator protocol (as a generator) to get the next line of data.
         '''
         # Open the file and skip to the first line of data.
-        fh = open(fileName,"r")
+        fh = open(self.fileName,"r")
         foundHeader = False
         for line in fh:
             self.lineNumber += 1
@@ -347,9 +348,9 @@ class VCFFileReader(SNPFileReader):
             # Assuming fields are tab-delimited.
             #
 
-            lineMatch = vcflineRe.match(line)
+            lineMatch = VCFFileReader.vcflineRe.match(line)
             if lineMatch:
-                realLocus = int(lineMatch.group(locus))
+                realLocus = int(lineMatch.group('locus'))
                 snpBase = lineMatch.group('sample_base')
                 refBase = lineMatch.group('ref_base')
                 filter = lineMatch.group('filter')
@@ -358,7 +359,7 @@ class VCFFileReader(SNPFileReader):
                 isDelete = False
                 isInsert = False
 
-                if filterQuality and filter != "PASS":
+                if self.filterQuality and filter != "PASS":
                     # Ignore low quality line.
                     continue
 

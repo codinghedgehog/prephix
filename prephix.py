@@ -36,7 +36,40 @@ import SNPInputReader
 
 VERSION = '3.0.0'
 
-def main():
+
+
+#####################
+# UTILITY FUNCTIONS
+#####################
+
+def print_debug(msg):
+    '''Prints output to STDOUT and logfile if debug flag is set.
+       If the quiet funnction is also set, then only log to file.
+
+       Parameters:
+       msg = Text to print/log.
+    '''
+    if debugMode:
+        if not quietMode:
+            print msg
+        logfile.write("{}\n".format(msg))
+
+def print_all(msg):
+    '''Prints output to STDOUT and logfile in one call.
+       If the quiet funnction is set, then only log to file.
+
+       Parameters:
+       msg = Text to print/log.
+    '''
+    if not quietMode:
+        print msg
+    logfile.write("{}\n".format(msg))
+
+
+########
+# MAIN #
+########
+if __name__ == '__main__':
     print "\nPrephix (Pre-Phrecon Input fiXer) v{0}\n".format(VERSION)
 
     # Define our parameters and parse with argparse module.
@@ -45,7 +78,7 @@ def main():
     progname = os.path.abspath(sys.argv[0])
 
     # Define arguments.
-    argParser.add_argument("input_files",nargs='*'help="One or more input files. Supported input file formats are k28.out (VAAL), NUCMER, VCF.")
+    argParser.add_argument("input_files",nargs='*',help="One or more input files. Supported input file formats are k28.out (VAAL), NUCMER, VCF.")
     argParser.add_argument("-batchid","--batchid",required=True,help="Used to create the output filenames for the combined SNP loci and ref files.")
     argParser.add_argument("--dbfile",nargs=1,help="The database filename.")
     argParser.add_argument("-exclude","--exclude",metavar='loci_exclusion_file',nargs=1,help="Exclude any bases within the loci ranges listed in the loci exclusion file.  The file should contain lines of the format 'label,start_loci,end_loci'")
@@ -87,7 +120,7 @@ def main():
 
     exportPhenoLink = args.export_phenolink
     if exportPhenoLink:
-        print "Wille xport a PhenoLink file."
+        print "Will export a PhenoLink file."
 
     inputFileList = args.input_files
     for inputFilename in inputFileList:
@@ -139,15 +172,15 @@ def main():
 
     # Create indexes.
     dbcursor.execute('''CREATE INDEX SNP_DATA_LOCUS_IDX ON SNP_DATA (locus)''')
-    dbcursor.execute('''CREATE INDEX INDEL_DATA_STRAINID_IDX ON SNP_DATA (strainid)''')
-    dbcursor.execute('''CREATE INDEX EXCLUSION_DATA_STRAINID_LABEL_IDX ON SNP_DATA (strainid,exclude_label)''')
+    dbcursor.execute('''CREATE INDEX INDEL_DATA_STRAINID_IDX ON INDEL_DATA (strainid)''')
+    dbcursor.execute('''CREATE INDEX EXCLUSION_DATA_STRAINID_LABEL_IDX ON EXCLUSION_DATA (strainid,exclude_label)''')
 
     dbconn.commit()
 
     # Read exclusion file, if any.
     # Expect exclusion file to contain one loci range per line, formatted: label,start_loci,end_loci (inclusive)
+    exclusionTable = {}
     if excludeFileName:
-        exclusionTable = {}
         excludefile = open(excludeFileName,"r")
         excludeCount = 0
         excludeRe = re.compile("^(?P<label>[^,]+),(?P<start_loci>[0-9]+),(?P<end_loci>[0-9]+)$")
@@ -162,12 +195,12 @@ def main():
                 excludeStartLoci = excludeMatch.group('start_loci')
                 excludeEndLoci = excludeMatch.group('end_loci')
 
-                if excludeLabel in excludeTable:
+                if excludeLabel in exclusionTable:
                     print_all("Duplicate exclusion label {} encountered on line {}. Quitting!".format(excludeLabel,excludeCount))
                     sys.exit(1)
                             
                 exclusionTable[excludeLabel] = [excludeStartLoci,excludeEndLoci]
-            else
+            else:
                 print_all("Badly formatted line: {} at line {}. Quitting!".format(excludeLine,excludeCount))
                 sys.exit(1)
 
@@ -186,7 +219,7 @@ def main():
         fileCount += 1
         snpFileReader = SNPInputReader.getSNPFileReader(inputFilename,filterQuality)
         strainid = snpFileReader.strainID
-        fileFormat = snpFileReader.format
+        fileFormat = snpFileReader.fileFormat
         shortFilename = os.path.basename(inputFilename)
 
         print_all("Processing {} file {}...".format(fileFormat,shortFilename))
@@ -219,9 +252,9 @@ def main():
 
             # Check exclusion of locus.
             excluded = False
-            for excludeLabel in excludeTable:
-                excludeStartLocus = excludeTable[excludeLabel][0]
-                excludeEndLocus = excludeTable[excludeLabel][1]
+            for excludeLabel in exclusionTable:
+                excludeStartLocus = exclusionTable[excludeLabel][0]
+                excludeEndLocus = exclusionTable[excludeLabel][1]
                 if locus >= excludeStartLocus and locus <= excludeEndLocus:
                     excluded = True
                     print_debug("Excluded loci {}".format(str(locus)))
@@ -245,43 +278,24 @@ def main():
                     raise 
 
                 try:
-                    dbconn.execute('''INSERT INTO REF_DATA (locus,base,source_file,line_number) VALUES (?,?,?)''',(locus,refBase,shortFilename,snpData.lineNumber))
+                    # See if this is a collision with existing reference base data at same locus (but different base).
+                    dbcursor.execute('''SELECT base,source_file,line_number from REF_DATA WHERE locus = ?''',(locus,))
+                    dbresult = dbcursor.fetchone()
+                    if dbresult:
+                        if dbresult[0] != refBase:
+                            print_all("*** ERROR: Reference base mismatch at same loci! Input file {} line {} has ref={}, but ref base at this loci was already recorded as {} while processing file {} line {}!".format(shortFilename,snpData.lineNumber,refBase,dbresult[0],dbresult[1],dbresult[2]))
+                            print_all("*** Are you sure all input files are using the same reference?")
+                            print_all("Failed.")
+                            sys.exit(1)
+                        else:
+                            print_debug("Duplicate (but identical - so this is OK) ref base found at locus {}: {}".format(locus,refBase))
                 except:
-                    print_all("*** DATABASE error inserting into REF_DATA {} {} {}".format(locus,refBase,shortFilename,snpData.lineNumber))
-                    print_all("*** Are you sure all input files are using the same reference?")
-                    print_all("Failed.")
+                    print_all("*** DATABASE error querying REF_DATA at locus".format(locus))
                     raise 
 
-#####################
-# UTILITY FUNCTIONS
-#####################
+                try:
+                    dbconn.execute('''INSERT INTO REF_DATA (locus,base,source_file,line_number) VALUES (?,?,?,?)''',(locus,refBase,shortFilename,snpData.lineNumber))
+                except:
+                    print_all("*** DATABASE error inserting into REF_DATA {} {} {}".format(locus,refBase,shortFilename,snpData.lineNumber))
+                    raise 
 
-def print_debug(msg):
-    '''Prints output to STDOUT and logfile if debug flag is set.
-       If the quiet funnction is also set, then only log to file.
-
-       Parameters:
-       msg = Text to print/log.
-    '''
-    if debugMode:
-        if not quietMode:
-            print msg
-        logfile.write("{}\n".format(msg))
-
-def print_all(msg):
-    '''Prints output to STDOUT and logfile in one call.
-       If the quiet funnction is set, then only log to file.
-
-       Parameters:
-       msg = Text to print/log.
-    '''
-    if not quietMode:
-        print msg
-    logfile.write("{}\n".format(msg))
-
-
-########
-# MAIN #
-########
-if __name__ == '__main__':
-    main()
