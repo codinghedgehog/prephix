@@ -103,15 +103,15 @@ class SNPDataLine:
     This is primary a data structure used as the return value from
     SNPFileReader's GetNextData method.
     '''
-    def __init__(self,rawLine,locus,snpBase,refBase=None,isIndel=False,isInsert=False,isDelete=False):
-        self.rawLine = rawLine       # Actual text line of file.
-        self.locus = locus           # Locus number
-        self.snpBase = snpBase       # The SNP (sample) base at the locus number for the SNP.
-        self.refBase = refBase       # The reference base at the locus number for the SNP.
-        self.isIndel = isIndel       # Is this line an indel?
-        self.isInsert = isInsert     # If this is an indel, is it an insertion?
-        self.isDelete = isDelete     # If this is an indel, is it a deletion?
-        self.lineNumber = 0          # The line number in the snp file associated with this data line object.
+    def __init__(self,rawLine,lineNumber,locus,snpBase,refBase=None,isIndel=False,isInsert=False,isDelete=False):
+        self.rawLine = rawLine           # Actual text line of file.
+        self.lineNumber = lineNumber     # The line number in the snp file associated with this data line object.
+        self.locus = locus               # Locus number
+        self.snpBase = snpBase           # The SNP (sample) base at the locus number for the SNP.
+        self.refBase = refBase           # The reference base at the locus number for the SNP.
+        self.isIndel = isIndel           # Is this line an indel?
+        self.isInsert = isInsert         # If this is an indel, is it an insertion?
+        self.isDelete = isDelete         # If this is an indel, is it a deletion?
     
 
 #
@@ -137,7 +137,7 @@ class K28FileReader(SNPFileReader):
 
         # Get strain ID from header comments: #<strain_id>/<reference_genome_filename>
         for line in fh:
-            strainMatch = strainRe.match(line)
+            strainMatch = K28FileReader.strainRe.match(line)
             if strainMatch:
                 self.strainID = str(strainMatch.group('strainid'))
                 break
@@ -200,7 +200,7 @@ class K28FileReader(SNPFileReader):
                         isInsert = True
 
 
-                yield SNPDataLine(line,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+                yield SNPDataLine(line,self.lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
                 raise SNPFileReadError("Unrecognized line at {}: {}".format(self.lineNumber,line),self.lineNumber,line)
 
@@ -224,7 +224,7 @@ class NucmerFileReader(SNPFileReader):
         # Get strain ID from header line: /path/to/reference/file /path/to/query/file
         # Assuming Strain ID is the query file name
         for line in fh:
-            strainMatch = strainRe.match(line)
+            strainMatch = NucmerFileReader.strainRe.match(line)
             if strainMatch:
                 self.strainID = str(strainMatch.group('strainid'))
                 break
@@ -294,7 +294,7 @@ class NucmerFileReader(SNPFileReader):
                         isInsert = True
 
 
-                yield SNPDataLine(line,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+                yield SNPDataLine(line,self.lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
                 raise SNPFileReadError("Unrecognized line at {}: {}".format(self.lineNumber,line),self.lineNumber,line)
 
@@ -373,6 +373,6 @@ class VCFFileReader(SNPFileReader):
                     isIndel = True
                     isInsert = True
 
-                yield SNPDataLine(line,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+                yield SNPDataLine(line,self.lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
                 raise SNPFileReadError("Unrecognized line at {}: {}".format(self.lineNumber,line),self.lineNumber,line)

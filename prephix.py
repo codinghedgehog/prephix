@@ -287,7 +287,7 @@ if __name__ == '__main__':
             # First check if this is a collision with existing reference base data at same locus (but different base).
             if locus in refDataTable:
                 if refDataTable[locus][0] != refBase:
-                    print_all("*** ERROR: Reference base mismatch at same loci! Input file {} line {} has ref={}, but ref base at this loci was already recorded as {} while processing file {} line {}!".format(shortFilename,snpData.lineNumber,refBase,refDataTable[locus][0],refDataTable[locus][1],refDataTAble[locus][2]))
+                    print_all("*** ERROR: Reference base mismatch at loci {}! Input file {} line {} has ref={}, but ref base at this loci was already recorded as {} while processing file {} line {}!".format(locus,shortFilename,snpData.lineNumber,refBase,refDataTable[locus][0],refDataTable[locus][1],refDataTable[locus][2]))
                     print_all("*** Are you sure all input files are from the same reference?")
                     print_all("Failed.")
                     sys.exit(1)
