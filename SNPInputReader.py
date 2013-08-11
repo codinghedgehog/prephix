@@ -124,7 +124,6 @@ class K28FileReader(SNPFileReader):
     for k28.out (VAAL) data.
     '''
 
-    k28lineRe = re.compile("^[0-9]+\s+(?P<locus>[0-9]+)\s+left=[ATCG]*\s+sample=(?P<sample_base>[ATCG]*)\s+ref=(?P<ref_base>[ATCG]*)\s+right=[ATCG]*$")
     strainRe = re.compile ("^#(?P<strainid>.+?)\/")
 
     def __init__(self,fileName):
@@ -149,6 +148,9 @@ class K28FileReader(SNPFileReader):
         '''
         Concrete implementation of iterator protocol (as a generator) to get the next line of data.
         '''
+
+        k28lineRe = re.compile("^[0-9]+\s+(?P<locus>[0-9]+)\s+left=[ATCG]*\s+sample=(?P<sample_base>[ATCG]*)\s+ref=(?P<ref_base>[ATCG]*)\s+right=[ATCG]*$")
+
         # Open the file and skip to the first line of data.
         fh = open(self.fileName,"r")
         for line in fh:
@@ -211,7 +213,6 @@ class NucmerFileReader(SNPFileReader):
     '''
 
     strainRe = re.compile("\s.+\/(?P<strainid>[^\/]+)$")
-    nucmerlineRe = re.compile("^(?P<locus>[0-9]+)\t(?P<ref_base>[ATCG]*)\t(?P<sample_base>[ATCG]*)\t[0-9]+")
 
     def __init__(self,fileName):
         super(NucmerFileReader,self).__init__(fileName)
@@ -235,6 +236,7 @@ class NucmerFileReader(SNPFileReader):
         '''
         Concrete implementation of iterator protocol (as a generator) to get the next line of data.
         '''
+        nucmerlineRe = re.compile("^(?P<locus>[0-9]+)\t(?P<ref_base>[ATCG]*)\t(?P<sample_base>[ATCG]*)\t[0-9]+")
         # Open the file and skip to the first line of data.
         fh = open(self.fileName,"r")
         foundHeader = False
@@ -263,7 +265,7 @@ class NucmerFileReader(SNPFileReader):
             # Some times one or another SUB may have no value, so match for [ATCG] and check for length 1.
             # If it is not length 1, then it is either blank or have more than one base, so skip as indel.
 
-            lineMatch = NucmerFileReader.nucmerlineRe.search(line)
+            lineMatch = nucmerlineRe.search(line)
             if lineMatch:
                 realLocus = int(lineMatch.group('locus'))
                 snpBase = lineMatch.group('sample_base')
@@ -304,7 +306,6 @@ class VCFFileReader(SNPFileReader):
     for VCF data.
     '''
 
-    vcflineRe = re.compile("^[^\t]+\t(?P<locus>[0-9]+)\t[^\t]+\t(?P<ref_base>[ATCGN,]+)\t(?P<sample_base>[ATCGN,]+)\t[^\t]+\t(?P<filter>[^\t]+)\t")
 
     def __init__(self,fileName,filterQuality=True):
         '''
@@ -323,6 +324,8 @@ class VCFFileReader(SNPFileReader):
         '''
         Concrete implementation of iterator protocol (as a generator) to get the next line of data.
         '''
+        vcflineRe = re.compile("^[^\t]+\t(?P<locus>[0-9]+)\t[^\t]+\t(?P<ref_base>[ATCGN,]+)\t(?P<sample_base>[ATCGN,]+)\t[^\t]+\t(?P<filter>[^\t]+)\t")
+
         # Open the file and skip to the first line of data.
         fh = open(self.fileName,"r")
         foundHeader = False
