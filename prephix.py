@@ -296,6 +296,7 @@ if __name__ == '__main__':
             else:
                 # If no collision, add it to the reference data table.
                 refDataTable[locus] = (refBase,shortFilename,snpData.lineNumber)
+                print_debug("Added ref locus {}: {}".format(locus,(refBase,shortFilename,snpData.lineNumber)))
 
     # Write out the reference file from the table of merged ref loci bases from the input file.
     # Output format is Loci [TAB] Base
@@ -304,7 +305,7 @@ if __name__ == '__main__':
     refDataTableKeyList = refDataTable.keys()
     refDataTableKeyList.sort()
     for refLocus in refDataTableKeyList:
-        reffile.write("{}\t{}\n".format(locus,refDataTable[locus][0]))
+        reffile.write("{}\t{}\n".format(refLocus,refDataTable[refLocus][0]))
 
 
     print_all("Done.")
