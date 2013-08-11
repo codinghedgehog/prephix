@@ -27,9 +27,6 @@ import sys
 import os
 import re
 import argparse
-import string
-import math
-import sqlite3
 
 # Custom include
 import SNPInputReader
@@ -135,47 +132,41 @@ if __name__ == '__main__':
     logFilename = "{}.log".format(batchid)
     logfile = open(logFilename,"w")
 
+    # SNP output file -- SNP loci file format is (StrainId [TAB] Loci [TAB] Base)
     outFilename = "{}.snp".format(batchid)
     outfile = open(outFilename,"w")
 
+    # Reference base file -- file format is (Loci [TAB] Base)
     refFilename = "{}.ref".format(batchid)
     reffile = open(refFilename,"w")
 
+    # The indel file format is a tab-delimted line of strain id, file format, the raw line, and indel type.
+    #
+    # NOTE: Compared to version 2 of prephix (perl), this has an additional field at the end, which is INS or DEL to
+    # indicate if the indel entry is an insertion or a deletion.
     indelFilename = "{}.indel".format(batchid)
     indelfile = open(indelFilename,"w")
 
-    # Setup in-memory database.
-    if args.dbfile == None:
-        dbconn = sqlite3.connect(':memory:')
-    else:
-        dbfilename = args.dbfile[0]
-        if os.path.isfile(dbfilename):
-            print "*** ERROR database file {0} already exists.  Please remove or use a different filename.\n".format(dbfilename)
-            sys.exit(1)
-        else:
-            dbconn = sqlite3.connect(dbfilename)
-    dbcursor = dbconn.cursor()
+    # Setup data dictionaries
 
-    # Create the table for the ref file data (COLUMNS: locus, base, source_file, line_number)
-    dbcursor.execute('''CREATE TABLE REF_DATA (locus integer PRIMARY KEY ASC, base text NOT NULL, source_file text, line_number integer)''')
+    # Reference Base Data Table
+    #
+    # Key is locus integer having a value of a 3-tuple in the order (base, source file name, line number)
+    # So {locus: (base, source filename, line number) }
+    # The source file name and line number are for tracking the original source of the base.
+    refDataTable = {} 
+    
+    # Exclusion Reporting Data Table
+    #
+    # Key is strain id, with a value of another dictionary with key exclude_label having a value of integer count.
+    # So {strainID: {exclude_label: count} }
+    excludeDataTable = {}
 
-    # Create the table for the snp file data (COLUMNS: strainid, locus, base)
-    dbcursor.execute('''CREATE TABLE SNP_DATA (strainid text, locus integer, base text NOT NULL, PRIMARY KEY(strainid,locus))''')
-
-    # Create the table for the indel file data (COLUMNS: strain,format, indel_type, raw line).
-    # indel_type values should be one of INS or DEL.
-    dbcursor.execute('''CREATE TABLE INDEL_DATA (strainid text NOT NULL, format text NOT NULL, indel_type text NOT NULL, rawline text NOT NULL)''')
-
-    # Create the table for the exclusion file report (COLUMNS: strainid, exclude_label, locus, raw line).
-    # indel_type values should be one of INS or DEL.
-    dbcursor.execute('''CREATE TABLE EXCLUSION_DATA (strainid text NOT NULL, exclude_label text NOT NULL, locus integer NOT NULL, rawline text NOT NULL)''')
-
-    # Create indexes.
-    dbcursor.execute('''CREATE INDEX SNP_DATA_LOCUS_IDX ON SNP_DATA (locus)''')
-    dbcursor.execute('''CREATE INDEX INDEL_DATA_STRAINID_IDX ON INDEL_DATA (strainid)''')
-    dbcursor.execute('''CREATE INDEX EXCLUSION_DATA_STRAINID_LABEL_IDX ON EXCLUSION_DATA (strainid,exclude_label)''')
-
-    dbconn.commit()
+    # Overall Stats Report Data Table
+    #
+    # Key is strain id having value of a list of SNP count, insert count, delete counts, exclusion count.
+    # So {strainID: [# SNPs, # insertions, # deletions, # exclusions] }
+    statsTable = {}
 
     # Read exclusion file, if any.
     # Expect exclusion file to contain one loci range per line, formatted: label,start_loci,end_loci (inclusive)
@@ -227,28 +218,38 @@ if __name__ == '__main__':
 
         print_debug("Strain ID is {}".format(strainid))
 
+        # Initialize stats entry for this strain.
+        statsTable[strainid] = [0,0,0,0]
+
         for snpData in snpFileReader:
             locus = snpData.locus
             snpBase = snpData.snpBase
             refBase = snpData.refBase
+
+            print_debug("At line: {}".format(snpData.lineNumber))
 
             # Record indels into their table, and skip futher processing.
             if snpData.isIndel:
                 if snpData.isInsert:
                     print_debug("Found indel line (insertion): {} ({})".format(snpData.rawLine,shortFilename))
                     indelType = "INS"
+
+                    # Increment insertion count in report
+                    statsTable[strainid][1] += 1
                 elif snpData.isDelete:
                     print_debug("Found indel line (deletion): {} ({})".format(snpData.rawLine,shortFilename))
                     indelType = "DEL"
+
+                    # Increment deletion count in report
+                    statsTable[strainid][2] += 1
                 else:
                     print_all("*** ERROR: Unknown indel type found at line {}: {}".format(snpData.lineNumber,snpData.rawLine))
                     sys.exit(1)
         
-                try:
-                    dbconn.execute('''INSERT INTO INDEL_DATA (strainid,format,indel_type,rawline) VALUES (?,?,?,?)''',(strainid,fileFormat,indelType,snpData.rawLine))
-                except:
-                    print_all("*** DATABASE error inserting into INDEL_DATA {} {} {} {}".format(strainid,fileFormat,indelType,snpData.rawLine))
-                    raise 
+                # Write entry to indel file. Format is tab-delimted line of strain id, file format, the raw line, and indel type.
+                # Compared to version 2 of prephix (perl), this has an additional field at the end, which is INS or DEL to
+                # indicate if the indel entry is an insertion or a deletion.
+                indelfile.write("{}\t{}\t{}\t{}\n".format(strainid,fileFormat,snpData.rawLine,indelType))
 
             # Check exclusion of locus.
             excluded = False
@@ -258,44 +259,110 @@ if __name__ == '__main__':
                 if locus >= excludeStartLocus and locus <= excludeEndLocus:
                     excluded = True
                     print_debug("Excluded loci {}".format(str(locus)))
-                    try:
-                        dbconn.execute('''INSERT INTO EXCLUSION_DATA (strainid,exclude_label,locus,rawline) VALUES (?,?,?,?)''',(strainid,excludeLabel,locus,snpData.rawLine))
-                    except:
-                        print_all("*** DATABASE error inserting into EXCLUSION_DATA {} {} {} {}".format(strainid,excludeLabel,locus,snpData.rawLine))
-                        raise 
-                    break
 
-           
+                    # Report exclusion count.
+                    statsTable[strainid][3] += 1
+
+                    if not strainid in excludeDataTable:
+                        excludeDataTable[strainid] = {excludeLabel: 1}
+                    elif not excludeLabel in excludeDataTable[strainid]:
+                        excludeDataTable[strainid][excludeLabel] = 1
+                    else:
+                        excludeDataTable[strainid][excludeLabel] += 1
+
             # If SNP data was an indel or excluded, skip further processing. 
             if excluded or snpData.isIndel:
+                print_debug("Data was excluded or indel, so skipping...")
                 continue
+
+
+            # Write data to SNP output file.
+            # SNP loci file format is (StrainId [TAB] Loci [TAB] Base)
+            outfile.write("{}\t{}\t{}\n".format(strainid,locus,snpBase))
+
+            # Record SNP count.
+            statsTable[strainid][0] += 1
+
+            # Insert data into REF dictionary
+            # First check if this is a collision with existing reference base data at same locus (but different base).
+            if locus in refDataTable:
+                if refDataTable[locus][0] != refBase:
+                    print_all("*** ERROR: Reference base mismatch at same loci! Input file {} line {} has ref={}, but ref base at this loci was already recorded as {} while processing file {} line {}!".format(shortFilename,snpData.lineNumber,refBase,refDataTable[locus][0],refDataTable[locus][1],refDataTAble[locus][2]))
+                    print_all("*** Are you sure all input files are from the same reference?")
+                    print_all("Failed.")
+                    sys.exit(1)
+                else:
+                    print_debug("Duplicate (but identical - so this is OK) ref base found at locus {}: {}".format(locus,refBase))
             else:
-                # Insert data into SNP and REF tables.
-                try:
-                    dbconn.execute('''INSERT INTO SNP_DATA (strainid,locus,base) VALUES (?,?,?)''',(strainid,locus,snpBase))
-                except:
-                    print_all("*** DATABASE error inserting into SNP_DATA {} {} {}".format(strainid,locus,snpBase))
-                    raise 
+                # If no collision, add it to the reference data table.
+                refDataTable[locus] = (refBase,shortFilename,snpData.lineNumber)
 
-                try:
-                    # See if this is a collision with existing reference base data at same locus (but different base).
-                    dbcursor.execute('''SELECT base,source_file,line_number from REF_DATA WHERE locus = ?''',(locus,))
-                    dbresult = dbcursor.fetchone()
-                    if dbresult:
-                        if dbresult[0] != refBase:
-                            print_all("*** ERROR: Reference base mismatch at same loci! Input file {} line {} has ref={}, but ref base at this loci was already recorded as {} while processing file {} line {}!".format(shortFilename,snpData.lineNumber,refBase,dbresult[0],dbresult[1],dbresult[2]))
-                            print_all("*** Are you sure all input files are using the same reference?")
-                            print_all("Failed.")
-                            sys.exit(1)
-                        else:
-                            print_debug("Duplicate (but identical - so this is OK) ref base found at locus {}: {}".format(locus,refBase))
-                except:
-                    print_all("*** DATABASE error querying REF_DATA at locus".format(locus))
-                    raise 
+    # Write out the reference file from the table of merged ref loci bases from the input file.
+    # Output format is Loci [TAB] Base
+    print_all("{} files were processed.".format(fileCount))
+    print_all("Merging and generating reference file from input file data....")
+    refDataTableKeyList = refDataTable.keys()
+    refDataTableKeyList.sort()
+    for refLocus in refDataTableKeyList:
+        reffile.write("{}\t{}\n".format(locus,refDataTable[locus][0]))
 
-                try:
-                    dbconn.execute('''INSERT INTO REF_DATA (locus,base,source_file,line_number) VALUES (?,?,?,?)''',(locus,refBase,shortFilename,snpData.lineNumber))
-                except:
-                    print_all("*** DATABASE error inserting into REF_DATA {} {} {}".format(locus,refBase,shortFilename,snpData.lineNumber))
-                    raise 
 
+    print_all("Done.")
+
+    if exportPhenoLink:
+        print_all("Exporting PhenoLink file...")
+        # For now, assuming pre2phe.py is in the same working directory.
+        if os.path.exists("./pre2phe.py"):
+            scriptMode = os.stat("./pre2phe.py")
+            if stat.S_IXUSR(scriptMode) or stat.S_IXGRP(scriptMode) or stat.S_IXOTH(scriptMode):
+                os.spawnl(os.P_WAIT,"./pre2phe.py --ref {} --snp {} --out {}.phenonlink.txt".format(refFilename,outFilename,batchid))
+            else:
+                print_all("***\n*** ERROR: Cannot find or execute helper script pre2phe.py in working directory!\n***")
+                print_all("Unable to generate PhenoLink file!")
+
+    # Cleanup
+    outfile.close()
+    reffile.close()
+
+    print_all("Merged SNP loci file is {}".format(outFilename))
+    print_all("Merged reference base file from this run is {}".format(refFilename))
+    print_all("Merged indel file from this run is {}".format(indelFilename))
+
+    # Write out stats report.
+    print_all("\n=== Final Report ===\n")
+
+    if not writeTablog:
+        for strainid in statsTable:
+            print_all("Strain: {}".format(strainid))
+            print_all("SNPs: {}".format(statsTable[strainid][0]))
+            print_all("Insertions: {}".format(statsTable[strainid][1]))
+            print_all("Deletions: {}".format(statsTable[strainid][2]))
+
+            totalIndels = statsTable[strainid][1] + statsTable[strainid][2]
+
+            print_all("Total indels: {}".format(totalIndels))
+            print_all("Loci excluded: {}".format(statsTable[strainid][3]))
+
+            if strainid in excludeDataTable:
+                for excludeLabel in excludeDataTable[strainid]:
+                    print_all("* Loci excluded from {}: {}".format(excludeLabel,excludeDataTable[strainid][excludeLabel]))
+
+        print_all("")
+
+    else:
+        # Tabular format requsted by -tablog flag.
+        print_all("Strain ID\tSNPs\tInserts\tDeletes\tTotal Indels\tLoci Excluded\n")
+        for strainid in statsTable:
+            totalIndels = statsTable[strainid][1] + statsTable[strainid][2]
+            print_all("{}\t{}\t{}\t{}\t{}\t{}".format(strainid,statsTable[strainid][0],statsTable[strainid][1],statsTable[strainid][2],totalIndels,statsTable[strainid][3]))
+
+        print_all("")
+
+        for strainid in statsTable:
+            if strainid in excludeDataTable:
+                print_all("Loci exclusion summary for {}:".format(strainid))
+                for excludeLabel in excludeDataTable[strainid]:
+                    print_all("* Loci excluded from {}: {}".format(excludeLabel,excludeDataTable[strainid][excludeLabel]))
+
+    print_all("\nDone.\n")
+    logfile.close()
