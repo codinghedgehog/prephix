@@ -124,7 +124,6 @@ class K28FileReader(SNPFileReader):
     for k28.out (VAAL) data.
     '''
 
-    strainRe = re.compile ("^#(?P<strainid>.+?)\/")
 
     def __init__(self,fileName):
         super(K28FileReader,self).__init__(fileName)
@@ -135,8 +134,9 @@ class K28FileReader(SNPFileReader):
         fh = open(self.fileName,"r")
 
         # Get strain ID from header comments: #<strain_id>/<reference_genome_filename>
+        strainRe = re.compile ("^#(?P<strainid>.+?)\/")
         for line in fh:
-            strainMatch = K28FileReader.strainRe.match(line)
+            strainMatch = strainRe.match(line)
             if strainMatch:
                 self.strainID = str(strainMatch.group('strainid'))
                 break
@@ -153,8 +153,9 @@ class K28FileReader(SNPFileReader):
 
         # Open the file and skip to the first line of data.
         fh = open(self.fileName,"r")
+        lineNumber = 0
         for line in fh:
-            self.lineNumber += 1
+            lineNumber += 1
             # Ignore other comments in the file (lines starting with #).  This includes the header comments.
             # Also skip the > line (don't care about genbank_id_from_ref_genome_file).
             if re.match("^(#)|(>)",line):
@@ -170,7 +171,7 @@ class K28FileReader(SNPFileReader):
             #
             # Some times sample= and ref= may have no value, so match for [ATCG] and check for length 1.
             # If it is not length 1, then it is either blank or have more than one base, so skip as indel.
-            lineMatch = K28FileReader.k28lineRe.match(line)
+            lineMatch = k28lineRe.match(line)
             if lineMatch:
                 # VAAL k28.out file loci is offset by +1
                 realLocus = int(lineMatch.group('locus')) + 1
@@ -202,9 +203,9 @@ class K28FileReader(SNPFileReader):
                         isInsert = True
 
 
-                yield SNPDataLine(line,self.lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+                yield SNPDataLine(line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
-                raise SNPFileReadError("Unrecognized line at {}: {}".format(self.lineNumber,line),self.lineNumber,line)
+                raise SNPFileReadError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
 
 class NucmerFileReader(SNPFileReader):
     '''
@@ -212,20 +213,19 @@ class NucmerFileReader(SNPFileReader):
     for nucmer data.
     '''
 
-    strainRe = re.compile("\s.+\/(?P<strainid>[^\/]+)$")
 
     def __init__(self,fileName):
         super(NucmerFileReader,self).__init__(fileName)
         self.fileFormat = "nucmer"
-        self.lineNumber = 0
 
         # Find the strainID
         fh = open(self.fileName,"r")
 
         # Get strain ID from header line: /path/to/reference/file /path/to/query/file
+        strainRe = re.compile("\s.+\/(?P<strainid>[^\/]+)$")
         # Assuming Strain ID is the query file name
         for line in fh:
-            strainMatch = NucmerFileReader.strainRe.search(line)
+            strainMatch = strainRe.search(line)
             if strainMatch:
                 self.strainID = str(strainMatch.group('strainid')).strip(os.linesep)
                 break
@@ -240,8 +240,9 @@ class NucmerFileReader(SNPFileReader):
         # Open the file and skip to the first line of data.
         fh = open(self.fileName,"r")
         foundHeader = False
+        lineNumber = 0
         for line in fh:
-            self.lineNumber += 1
+            lineNumber += 1
 
             # Keep skipping lines until we reach the data portion.  This should occur after the data header line:
             # [P1]  [SUB] [SUB] [P2]  [BUFF]  [DIST]  [LEN R] [LEN Q] [FRM] [TAGS]
@@ -296,9 +297,9 @@ class NucmerFileReader(SNPFileReader):
                         isInsert = True
 
 
-                yield SNPDataLine(line,self.lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+                yield SNPDataLine(line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
-                raise SNPFileReadError("Unrecognized line at {}: {}".format(self.lineNumber,line),self.lineNumber,line)
+                raise SNPFileReadError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
 
 class VCFFileReader(SNPFileReader):
     '''
@@ -313,12 +314,10 @@ class VCFFileReader(SNPFileReader):
         '''
         super(VCFFileReader,self).__init__(fileName)
         self.fileFormat = "vcf"
-        self.lineNumber = 0
         self.filterQuality = filterQuality
 
         # Set the strainID to the filename for now.
         self.strainID = os.path.basename(fileName)
-
 
     def __iter__(self):
         '''
@@ -329,8 +328,9 @@ class VCFFileReader(SNPFileReader):
         # Open the file and skip to the first line of data.
         fh = open(self.fileName,"r")
         foundHeader = False
+        lineNumber = 0
         for line in fh:
-            self.lineNumber += 1
+            lineNumber += 1
 
             # Keep skipping lines until we reach the data portion.  This should occur after the data header line:
             #CHROM  POS ID  REF ALT QUAL  FILTER  INFO
@@ -351,7 +351,7 @@ class VCFFileReader(SNPFileReader):
             # Assuming fields are tab-delimited.
             #
 
-            lineMatch = VCFFileReader.vcflineRe.match(line)
+            lineMatch = vcflineRe.match(line)
             if lineMatch:
                 realLocus = int(lineMatch.group('locus'))
                 snpBase = lineMatch.group('sample_base')
@@ -376,6 +376,6 @@ class VCFFileReader(SNPFileReader):
                     isIndel = True
                     isInsert = True
 
-                yield SNPDataLine(line,self.lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+                yield SNPDataLine(line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
-                raise SNPFileReadError("Unrecognized line at {}: {}".format(self.lineNumber,line),self.lineNumber,line)
+                raise SNPFileReadError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
