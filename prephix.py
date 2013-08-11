@@ -27,6 +27,9 @@ import sys
 import os
 import re
 import argparse
+import logging
+
+import statprof
 
 # Custom include
 import SNPInputReader
@@ -38,18 +41,6 @@ VERSION = '3.0.0'
 #####################
 # UTILITY FUNCTIONS
 #####################
-
-def print_debug(msg):
-    '''Prints output to STDOUT and logfile if debug flag is set.
-       If the quiet funnction is also set, then only log to file.
-
-       Parameters:
-       msg = Text to print/log.
-    '''
-    if debugMode:
-        if not quietMode:
-            print msg
-        logfile.write("{}\n".format(msg))
 
 def print_all(msg):
     '''Prints output to STDOUT and logfile in one call.
@@ -120,7 +111,9 @@ if __name__ == '__main__':
         print "Will export a PhenoLink file."
 
     inputFileList = args.input_files
+    fileCount = 0
     for inputFilename in inputFileList:
+        fileCount += 1 
         if os.path.isfile(inputFilename):
             print "Found {} file to process.".format(inputFilename)
         else:
@@ -128,9 +121,20 @@ if __name__ == '__main__':
             sys.exit(1)
             
 
+
     # Prep files for read/write.
+
     logFilename = "{}.log".format(batchid)
     logfile = open(logFilename,"w")
+
+    print_all("Found {} files to process.".format(fileCount))
+
+    debugLogFilename = "{}.debug.log".format(batchid)
+    if debugMode:
+        debugLevel = logging.DEBUG
+    else:
+        debugLevel = logging.WARNING
+    logging.basicConfig(filename=debugLogFilename,filemode='w',level=debugLevel)
 
     # SNP output file -- SNP loci file format is (StrainId [TAB] Loci [TAB] Base)
     outFilename = "{}.snp".format(batchid)
@@ -219,7 +223,7 @@ if __name__ == '__main__':
         print_all("Processing {} file {}...".format(fileFormat,shortFilename))
         sys.stdout.flush()
 
-        print_debug("Strain ID is {}".format(strainid))
+        logging.debug("Strain ID is %s",strainid)
 
         # Initialize stats entry for this strain.
         statsTable[strainid] = [0,0,0,0]
@@ -229,18 +233,18 @@ if __name__ == '__main__':
             snpBase = snpData.snpBase
             refBase = snpData.refBase
 
-            print_debug("At line: {}".format(snpData.lineNumber))
+            logging.debug("At line: %s",snpData.lineNumber)
 
             # Record indels into their table, and skip futher processing.
             if snpData.isIndel:
                 if snpData.isInsert:
-                    print_debug("Found indel line (insertion): {} ({})".format(snpData.rawLine,shortFilename))
+                    logging.debug("Found indel line (insertion): %s (%s)",snpData.rawLine,shortFilename)
                     indelType = "INS"
 
                     # Increment insertion count in report
                     statsTable[strainid][1] += 1
                 elif snpData.isDelete:
-                    print_debug("Found indel line (deletion): {} ({})".format(snpData.rawLine,shortFilename))
+                    logging.debug("Found indel line (deletion): %s (%s)",snpData.rawLine,shortFilename)
                     indelType = "DEL"
 
                     # Increment deletion count in report
@@ -261,7 +265,7 @@ if __name__ == '__main__':
                 excludeEndLocus = exclusionTable[excludeLabel][1]
                 if locus >= excludeStartLocus and locus <= excludeEndLocus:
                     excluded = True
-                    print_debug("Excluded loci {}".format(str(locus)))
+                    logging.debug("Excluded loci %s",locus)
 
                     # Report exclusion count.
                     statsTable[strainid][3] += 1
@@ -275,7 +279,7 @@ if __name__ == '__main__':
 
             # If SNP data was an indel or excluded, skip further processing. 
             if excluded or snpData.isIndel:
-                print_debug("Data was excluded or indel, so skipping...")
+                logging.debug("Data was excluded or indel, so skipping...")
                 continue
 
 
@@ -295,11 +299,11 @@ if __name__ == '__main__':
                     print_all("Failed.")
                     sys.exit(1)
                 else:
-                    print_debug("Duplicate (but identical - so this is OK) ref base found at locus {}: {}".format(locus,refBase))
+                    logging.debug("Duplicate (but identical - so this is OK) ref base found at locus %s: %s",locus,refBase)
             else:
                 # If no collision, add it to the reference data table.
                 refDataTable[locus] = (refBase,shortFilename,snpData.lineNumber)
-                print_debug("Added ref locus {}: {}".format(locus,(refBase,shortFilename,snpData.lineNumber)))
+                logging.debug("Added ref locus %s: (%s,%s,%s)",locus,refBase,shortFilename,snpData.lineNumber)
 
 
     # Write out the reference file from the table of merged ref loci bases from the input file.
@@ -371,4 +375,3 @@ if __name__ == '__main__':
                     print_all("* Loci excluded from {}: {}".format(excludeLabel,excludeDataTable[strainid][excludeLabel]))
 
     print_all("\nDone.\n")
-    logfile.close()
