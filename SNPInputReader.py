@@ -224,9 +224,9 @@ class NucmerFileReader(SNPFileReader):
         # Get strain ID from header line: /path/to/reference/file /path/to/query/file
         # Assuming Strain ID is the query file name
         for line in fh:
-            strainMatch = NucmerFileReader.strainRe.match(line)
+            strainMatch = NucmerFileReader.strainRe.search(line)
             if strainMatch:
-                self.strainID = str(strainMatch.group('strainid'))
+                self.strainID = str(strainMatch.group('strainid')).strip(os.linesep)
                 break
 
         fh.close()
@@ -263,7 +263,7 @@ class NucmerFileReader(SNPFileReader):
             # Some times one or another SUB may have no value, so match for [ATCG] and check for length 1.
             # If it is not length 1, then it is either blank or have more than one base, so skip as indel.
 
-            lineMatch = NucmerFileReader.nucmerlineRe.match(line)
+            lineMatch = NucmerFileReader.nucmerlineRe.search(line)
             if lineMatch:
                 realLocus = int(lineMatch.group('locus'))
                 snpBase = lineMatch.group('sample_base')
