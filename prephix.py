@@ -206,7 +206,10 @@ if __name__ == '__main__':
 
     fileCount = 0
     # Process the snp files.
-    for inputFilename in inputFileList:
+    while len(inputFileList) > 0:
+
+        inputFilename = inputFileList.pop()
+
         fileCount += 1
         snpFileReader = SNPInputReader.getSNPFileReader(inputFilename,filterQuality)
         strainid = snpFileReader.strainID
@@ -298,6 +301,7 @@ if __name__ == '__main__':
                 refDataTable[locus] = (refBase,shortFilename,snpData.lineNumber)
                 print_debug("Added ref locus {}: {}".format(locus,(refBase,shortFilename,snpData.lineNumber)))
 
+
     # Write out the reference file from the table of merged ref loci bases from the input file.
     # Output format is Loci [TAB] Base
     print_all("{} files were processed.".format(fileCount))
@@ -347,6 +351,7 @@ if __name__ == '__main__':
             if strainid in excludeDataTable:
                 for excludeLabel in excludeDataTable[strainid]:
                     print_all("* Loci excluded from {}: {}".format(excludeLabel,excludeDataTable[strainid][excludeLabel]))
+            print_all("")
 
         print_all("")
 
