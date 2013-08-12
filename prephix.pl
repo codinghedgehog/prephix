@@ -37,7 +37,7 @@
 
 use strict;
 
-my $VERSION="2.5.2";
+my $VERSION="2.5.3";
 
 print "\nPrephix (Pre-Phrecon Input fiXer) v$VERSION\n\n";
 
@@ -232,6 +232,10 @@ foreach $loci (sort {$a <=> $b} keys %refBaseTable){
 
 print_all("Done.\n");
 
+close($outfile);
+close($reffile);
+close($indelfile);
+
 if ($exportPhenoLink eq "Y"){
 	print_all("Exporting PhenoLink file...");
 
@@ -244,9 +248,6 @@ if ($exportPhenoLink eq "Y"){
 	}
 }
 
-close($outfile);
-close($reffile);
-close($indelfile);
 print_all("\nMerged SNP loci file is $outFilename\n");
 print_all("Merged reference base file from this run is $refFilename\n");
 print_all("Merged indel file from this run is $indelFilename\n");

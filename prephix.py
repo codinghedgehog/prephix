@@ -26,6 +26,7 @@
 import sys
 import os
 import re
+import stat
 import argparse
 import logging
 
@@ -323,20 +324,21 @@ if __name__ == '__main__':
 
     print_all("Done.")
 
+    # Cleanup
+    outfile.close()
+    reffile.close()
+
     if exportPhenoLink:
         print_all("Exporting PhenoLink file...")
         # For now, assuming pre2phe.py is in the same working directory.
         if os.path.exists("./pre2phe.py"):
-            scriptMode = os.stat("./pre2phe.py")
-            if stat.S_IXUSR(scriptMode) or stat.S_IXGRP(scriptMode) or stat.S_IXOTH(scriptMode):
-                os.spawnl(os.P_WAIT,"./pre2phe.py --ref {} --snp {} --out {}.phenonlink.txt".format(refFilename,outFilename,batchid))
+            scriptStat = os.stat("./pre2phe.py")
+            if (stat.S_IXUSR & scriptStat.st_mode) or (stat.S_IXGRP & scriptStat.st_mode) or (stat.S_IXOTH & scriptStat.st_mode):
+                os.system("./pre2phe.py --ref {} --snp {} --out {}.phenonlink.txt".format(refFilename,outFilename,batchid))
             else:
                 print_all("***\n*** ERROR: Cannot find or execute helper script pre2phe.py in working directory!\n***")
                 print_all("Unable to generate PhenoLink file!")
 
-    # Cleanup
-    outfile.close()
-    reffile.close()
 
     print_all("Merged SNP loci file is {}".format(outFilename))
     print_all("Merged reference base file from this run is {}".format(refFilename))
