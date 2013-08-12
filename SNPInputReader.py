@@ -1,6 +1,20 @@
 # This is a helper module for Prephix. It uses a pseudo-factory pattern to
 # handle the different SNP input file formats that Prephix expects to support.
 #
+# Each SNP input file reader class is expected to be ITERABLE, and returns
+# a tupe of (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+#
+# Where:
+#
+# line = The raw line as read from the input file.
+# lineNumber = The line number of the file line.
+# realLocus = Adjusted locus value (some formats have an offset relative to the base reference)
+# snpBase = The sample base at the given locus
+# refBase = The reference base at the given locus
+# isIndel = Boolean to indicate if this line is an indel.
+# isInsert = Boolean to indicate if this line is an indel insertion.
+# isDelete  = Boolean to indicate if this line is an indel deletion.
+#
 
 import re
 import os
@@ -68,7 +82,7 @@ class SNPFileReadError(Exception):
     line text itself where the error occurred.
     '''
     def __init__(self,message,lineNumber=None,line=None):
-        super.__init__(self,message)
+        super(SNPFileReadError,self).__init__(message)
         self.lineNumber = lineNumber
         self.lineText = line
 
@@ -98,22 +112,6 @@ class SNPFileReader(object):
     def __iter__():
         raise NotImplementedError
 
-class SNPDataLine:
-    '''
-    This is primary a data structure used as the return value from
-    SNPFileReader's GetNextData method.
-    '''
-    def __init__(self,rawLine,lineNumber,locus,snpBase,refBase=None,isIndel=False,isInsert=False,isDelete=False):
-        self.rawLine = rawLine           # Actual text line of file.
-        self.lineNumber = lineNumber     # The line number in the snp file associated with this data line object.
-        self.locus = locus               # Locus number
-        self.snpBase = snpBase           # The SNP (sample) base at the locus number for the SNP.
-        self.refBase = refBase           # The reference base at the locus number for the SNP.
-        self.isIndel = isIndel           # Is this line an indel?
-        self.isInsert = isInsert         # If this is an indel, is it an insertion?
-        self.isDelete = isDelete         # If this is an indel, is it a deletion?
-    
-
 #
 # Private Classes
 #
@@ -130,36 +128,42 @@ class K28FileReader(SNPFileReader):
         self.fileFormat = "k28"
         self.lineNumber = 0
 
+        self.k28lineRe = re.compile("^[0-9]+\s+(?P<locus>[0-9]+)\s+left=[ATCG]*\s+sample=(?P<sample_base>[ATCG]*)\s+ref=(?P<ref_base>[ATCG]*)\s+right=[ATCG]*$")
+
         # Find the strainID
         fh = open(self.fileName,"r")
+        self._fileLines = fh.readlines()
+        fh.close()
 
         # Get strain ID from header comments: #<strain_id>/<reference_genome_filename>
         strainRe = re.compile ("^#(?P<strainid>.+?)\/")
-        for line in fh:
+        for line in self._fileLines:
+            self.lineNumber +=1
             strainMatch = strainRe.match(line)
             if strainMatch:
                 self.strainID = str(strainMatch.group('strainid'))
                 break
 
+        # Skip to the first line of data.
+        foundHeader = False
+        while self.lineNumber <= len(self._fileLines):
+            line = self._fileLines[self.lineNumber - 1]
+            # Ignore other comments in the file (lines starting with #).  This includes the header comments.
+            # Also skip the > line (don't care about genbank_id_from_ref_genome_file).
+            if not foundHeader:
+                if not re.match("^(#|>)",line):
+                    # Exit now since this IS a data line. Want to end with line number pointing to first data line.
+                    foundHeader = True
+                    break
+            self.lineNumber += 1
 
-        fh.close()
 
     def __iter__(self):
         '''
         Concrete implementation of iterator protocol (as a generator) to get the next line of data.
         '''
 
-        k28lineRe = re.compile("^[0-9]+\s+(?P<locus>[0-9]+)\s+left=[ATCG]*\s+sample=(?P<sample_base>[ATCG]*)\s+ref=(?P<ref_base>[ATCG]*)\s+right=[ATCG]*$")
-
-        # Open the file and skip to the first line of data.
-        fh = open(self.fileName,"r")
-        lineNumber = 0
-        for line in fh:
-            lineNumber += 1
-            # Ignore other comments in the file (lines starting with #).  This includes the header comments.
-            # Also skip the > line (don't care about genbank_id_from_ref_genome_file).
-            if re.match("^(#)|(>)",line):
-                continue
+        while self.lineNumber <= len(self._fileLines):
 
             # At this point, should be at a data line.
 
@@ -171,7 +175,16 @@ class K28FileReader(SNPFileReader):
             #
             # Some times sample= and ref= may have no value, so match for [ATCG] and check for length 1.
             # If it is not length 1, then it is either blank or have more than one base, so skip as indel.
-            lineMatch = k28lineRe.match(line)
+            lineNumber = self.lineNumber
+            line = self._fileLines[lineNumber - 1].strip(os.linesep)
+            self.lineNumber += 1
+
+            # Skip comments (for K28/VAAL files, there are some comments at the end, not just the beginning).
+            if line.startswith("#"):
+                continue
+
+            # Else parse the line.
+            lineMatch = self.k28lineRe.match(line)
             if lineMatch:
                 # VAAL k28.out file loci is offset by +1
                 realLocus = int(lineMatch.group('locus')) + 1
@@ -203,7 +216,7 @@ class K28FileReader(SNPFileReader):
                         isInsert = True
 
 
-                yield SNPDataLine(line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+                yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
                 raise SNPFileReadError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
 
@@ -217,41 +230,50 @@ class NucmerFileReader(SNPFileReader):
     def __init__(self,fileName):
         super(NucmerFileReader,self).__init__(fileName)
         self.fileFormat = "nucmer"
+        self.lineNumber = 0
+
+        self.nucmerlineRe = re.compile("^(?P<locus>[0-9]+)\t(?P<ref_base>[ATCG]*)\t(?P<sample_base>[ATCG]*)\t[0-9]+")
 
         # Find the strainID
-        fh = open(self.fileName,"r")
+        fh = open(fileName,"r")
+        self._fileLines = fh.readlines()
+        fh.close()
 
         # Get strain ID from header line: /path/to/reference/file /path/to/query/file
         strainRe = re.compile("\s.+\/(?P<strainid>[^\/]+)$")
+
         # Assuming Strain ID is the query file name
-        for line in fh:
+        for line in self._fileLines:
+            self.lineNumber += 1
             strainMatch = strainRe.search(line)
             if strainMatch:
                 self.strainID = str(strainMatch.group('strainid')).strip(os.linesep)
                 break
 
-        fh.close()
-
-    def __iter__(self):
-        '''
-        Concrete implementation of iterator protocol (as a generator) to get the next line of data.
-        '''
-        nucmerlineRe = re.compile("^(?P<locus>[0-9]+)\t(?P<ref_base>[ATCG]*)\t(?P<sample_base>[ATCG]*)\t[0-9]+")
         # Open the file and skip to the first line of data.
-        fh = open(self.fileName,"r")
         foundHeader = False
-        lineNumber = 0
-        for line in fh:
-            lineNumber += 1
+        while self.lineNumber <= len(self._fileLines):
+            line = self._fileLines[self.lineNumber - 1].strip(os.linesep)
 
             # Keep skipping lines until we reach the data portion.  This should occur after the data header line:
             # [P1]  [SUB] [SUB] [P2]  [BUFF]  [DIST]  [LEN R] [LEN Q] [FRM] [TAGS]
             # So look for [P1]
             if not foundHeader:
                 if re.match("^\[P1\]",line):
-                    # Found header.  Advance to next line (a valid data line) to begin processing.
+                    # Found header. Exit on next pass to advance line number to the first data line (first line after this header)
                     foundHeader = True
-                continue
+            else:
+                break
+            self.lineNumber += 1
+
+    def __iter__(self):
+        '''
+        Concrete implementation of iterator protocol (as a generator) to get the next line of data.
+        '''
+        while self.lineNumber <= len(self._fileLines):
+            lineNumber = self.lineNumber
+            line = self._fileLines[lineNumber - 1].strip(os.linesep)
+            self.lineNumber += 1
 
             # At this point, should be at a data line.
 
@@ -266,7 +288,7 @@ class NucmerFileReader(SNPFileReader):
             # Some times one or another SUB may have no value, so match for [ATCG] and check for length 1.
             # If it is not length 1, then it is either blank or have more than one base, so skip as indel.
 
-            lineMatch = nucmerlineRe.search(line)
+            lineMatch = self.nucmerlineRe.search(line)
             if lineMatch:
                 realLocus = int(lineMatch.group('locus'))
                 snpBase = lineMatch.group('sample_base')
@@ -297,7 +319,7 @@ class NucmerFileReader(SNPFileReader):
                         isInsert = True
 
 
-                yield SNPDataLine(line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+                yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
                 raise SNPFileReadError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
 
@@ -315,22 +337,21 @@ class VCFFileReader(SNPFileReader):
         super(VCFFileReader,self).__init__(fileName)
         self.fileFormat = "vcf"
         self.filterQuality = filterQuality
+        self.lineNumber = 0
+        self._fileLines = []
+        self.vcflineRe = re.compile("^[^\t]+\t(?P<locus>[0-9]+)\t[^\t]+\t(?P<ref_base>[ATCGN,]+)\t(?P<sample_base>[ATCGN,]+)\t[^\t]+\t(?P<filter>[^\t]+)\t")
 
         # Set the strainID to the filename for now.
         self.strainID = os.path.basename(fileName)
 
-    def __iter__(self):
-        '''
-        Concrete implementation of iterator protocol (as a generator) to get the next line of data.
-        '''
-        vcflineRe = re.compile("^[^\t]+\t(?P<locus>[0-9]+)\t[^\t]+\t(?P<ref_base>[ATCGN,]+)\t(?P<sample_base>[ATCGN,]+)\t[^\t]+\t(?P<filter>[^\t]+)\t")
-
         # Open the file and skip to the first line of data.
-        fh = open(self.fileName,"r")
+        # Move past the header lines (not needed since it's been determined elsewhere what this file type is).
+        fh = open(fileName,"r")
+        self._fileLines = fh.readlines()
+        fh.close()
         foundHeader = False
-        lineNumber = 0
-        for line in fh:
-            lineNumber += 1
+        for line in self._fileLines:
+            self.lineNumber += 1
 
             # Keep skipping lines until we reach the data portion.  This should occur after the data header line:
             #CHROM  POS ID  REF ALT QUAL  FILTER  INFO
@@ -340,8 +361,19 @@ class VCFFileReader(SNPFileReader):
                     # Found header!  Advance one more line to actual data line.
                     foundHeader = True
                 continue
+            else:
+                break
 
 
+    def __iter__(self):
+        '''
+        Concrete implementation of iterator protocol (as a generator) to get the next line of data.
+        '''
+
+        while self.lineNumber <= len(self._fileLines):
+            lineNumber = self.lineNumber
+            line = self._fileLines[lineNumber - 1].strip(os.linesep)
+            self.lineNumber += 1
             # At this point, should be at a data line.
 
             # Assuming VCF input body data to be in the format:
@@ -351,7 +383,7 @@ class VCFFileReader(SNPFileReader):
             # Assuming fields are tab-delimited.
             #
 
-            lineMatch = vcflineRe.match(line)
+            lineMatch = self.vcflineRe.match(line)
             if lineMatch:
                 realLocus = int(lineMatch.group('locus'))
                 snpBase = lineMatch.group('sample_base')
@@ -376,6 +408,6 @@ class VCFFileReader(SNPFileReader):
                     isIndel = True
                     isInsert = True
 
-                yield SNPDataLine(line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+                yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
                 raise SNPFileReadError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)

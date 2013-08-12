@@ -229,34 +229,39 @@ if __name__ == '__main__':
         statsTable[strainid] = [0,0,0,0]
 
         for snpData in snpFileReader:
-            locus = snpData.locus
-            snpBase = snpData.snpBase
-            refBase = snpData.refBase
+            rawLine = snpData[0]
+            lineNumber = snpData[1]
+            locus = snpData[2]
+            snpBase = snpData[3]
+            refBase = snpData[4]
+            isIndel = snpData[5]
+            isInsert = snpData[6]
+            isDelete = snpData[7]
 
-            logging.debug("At line: %s",snpData.lineNumber)
+            logging.debug("At line: %s",lineNumber)
 
             # Record indels into their table, and skip futher processing.
-            if snpData.isIndel:
-                if snpData.isInsert:
-                    logging.debug("Found indel line (insertion): %s (%s)",snpData.rawLine,shortFilename)
+            if isIndel:
+                if isInsert:
+                    logging.debug("Found indel line (insertion): %s (%s)",rawLine,shortFilename)
                     indelType = "INS"
 
                     # Increment insertion count in report
                     statsTable[strainid][1] += 1
-                elif snpData.isDelete:
-                    logging.debug("Found indel line (deletion): %s (%s)",snpData.rawLine,shortFilename)
+                elif isDelete:
+                    logging.debug("Found indel line (deletion): %s (%s)",rawLine,shortFilename)
                     indelType = "DEL"
 
                     # Increment deletion count in report
                     statsTable[strainid][2] += 1
                 else:
-                    print_all("*** ERROR: Unknown indel type found at line {}: {}".format(snpData.lineNumber,snpData.rawLine))
+                    print_all("*** ERROR: Unknown indel type found at line {}: {}".format(lineNumber,rawLine))
                     sys.exit(1)
         
                 # Write entry to indel file. Format is tab-delimted line of strain id, file format, the raw line, and indel type.
                 # Compared to version 2 of prephix (perl), this has an additional field at the end, which is INS or DEL to
                 # indicate if the indel entry is an insertion or a deletion.
-                indelfile.write("{}\t{}\t{}\t{}\n".format(strainid,fileFormat,snpData.rawLine,indelType))
+                indelfile.write("{}\t{}\t{}\t{}\n".format(strainid,fileFormat,rawLine,indelType))
 
             # Check exclusion of locus.
             excluded = False
@@ -278,7 +283,7 @@ if __name__ == '__main__':
                         excludeDataTable[strainid][excludeLabel] += 1
 
             # If SNP data was an indel or excluded, skip further processing. 
-            if excluded or snpData.isIndel:
+            if excluded or isIndel:
                 logging.debug("Data was excluded or indel, so skipping...")
                 continue
 
@@ -294,7 +299,7 @@ if __name__ == '__main__':
             # First check if this is a collision with existing reference base data at same locus (but different base).
             if locus in refDataTable:
                 if refDataTable[locus][0] != refBase:
-                    print_all("*** ERROR: Reference base mismatch at loci {}! Input file {} line {} has ref={}, but ref base at this loci was already recorded as {} while processing file {} line {}!".format(locus,shortFilename,snpData.lineNumber,refBase,refDataTable[locus][0],refDataTable[locus][1],refDataTable[locus][2]))
+                    print_all("*** ERROR: Reference base mismatch at loci {}! Input file {} line {} has ref={}, but ref base at this loci was already recorded as {} while processing file {} line {}!".format(locus,shortFilename,lineNumber,refBase,refDataTable[locus][0],refDataTable[locus][1],refDataTable[locus][2]))
                     print_all("*** Are you sure all input files are from the same reference?")
                     print_all("Failed.")
                     sys.exit(1)
@@ -302,8 +307,8 @@ if __name__ == '__main__':
                     logging.debug("Duplicate (but identical - so this is OK) ref base found at locus %s: %s",locus,refBase)
             else:
                 # If no collision, add it to the reference data table.
-                refDataTable[locus] = (refBase,shortFilename,snpData.lineNumber)
-                logging.debug("Added ref locus %s: (%s,%s,%s)",locus,refBase,shortFilename,snpData.lineNumber)
+                refDataTable[locus] = (refBase,shortFilename,lineNumber)
+                logging.debug("Added ref locus %s: (%s,%s,%s)",locus,refBase,shortFilename,lineNumber)
 
 
     # Write out the reference file from the table of merged ref loci bases from the input file.
