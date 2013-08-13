@@ -21,6 +21,7 @@
 # You may mix input file types within a single run/batch.
 #
 # 8/08/2013 - Andrew Pann - Initial port of perl-version Prephix (v2.5.2) to 3.0.
+# 8/12/2013 - Andrew Pann - v3.1.0 - Added handling of empty snp input files (header, but no data).
 
 
 import sys
@@ -35,7 +36,7 @@ import statprof
 # Custom include
 import SNPInputReader
 
-VERSION = '3.0.0'
+VERSION = '3.1.0'
 
 
 
@@ -310,6 +311,11 @@ if __name__ == '__main__':
                 # If no collision, add it to the reference data table.
                 refDataTable[locus] = (refBase,shortFilename,lineNumber)
                 logging.debug("Added ref locus %s: (%s,%s,%s)",locus,refBase,shortFilename,lineNumber)
+
+        # If snp input file was empty, write a placeholder for it.
+        if statsTable[strainid][0] == 0:
+            logging.debug("Empty SNP file for strain {}".format(strainid))
+            outfile.write("{}\t{}\t{}\n".format(strainid,-1,"-"))
 
 
     # Write out the reference file from the table of merged ref loci bases from the input file.
