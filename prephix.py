@@ -36,7 +36,7 @@ import statprof
 # Custom include
 import SNPInputReader
 
-VERSION = '3.1.0'
+VERSION = '3.1.1'
 
 
 
@@ -70,8 +70,7 @@ if __name__ == '__main__':
     # Define arguments.
     argParser.add_argument("input_files",nargs='*',help="One or more input files. Supported input file formats are k28.out (VAAL), NUCMER, VCF.")
     argParser.add_argument("-batchid","--batchid",required=True,help="Used to create the output filenames for the combined SNP loci and ref files.")
-    argParser.add_argument("--dbfile",nargs=1,help="The database filename.")
-    argParser.add_argument("-exclude","--exclude",metavar='loci_exclusion_file',nargs=1,help="Exclude any bases within the loci ranges listed in the loci exclusion file.  The file should contain lines of the format 'label,start_loci,end_loci'")
+    argParser.add_argument("-exclude","--exclude",metavar='loci_exclusion_file',help="Exclude any bases within the loci ranges listed in the loci exclusion file.  The file should contain lines of the format 'label,start_loci,end_loci'")
     argParser.add_argument("-ignore_quality","--ignore_quality",action="store_true",help="Exclude any bases within the loci ranges listed in the loci exclusion file.  The file should contain lines of the format 'label,start_loci,end_loci'")
     argParser.add_argument("-tablog","--tablog",action="store_true",help="Print out the summary in tabular format.")
     argParser.add_argument("-export_phenolink","--export_phenolink",action="store_true",help="Additionally write out a Pheonolink compatible output file.")
@@ -95,7 +94,7 @@ if __name__ == '__main__':
 
     excludeFileName = args.exclude
     if excludeFileName:
-        print "Exclusion file is {}".format(excludeFilename)
+        print "Exclusion file is {}".format(excludeFileName)
 
     batchid = args.batchid
     print "Batch id is {}".format(batchid)
@@ -197,6 +196,7 @@ if __name__ == '__main__':
                     sys.exit(1)
                             
                 exclusionTable[excludeLabel] = [excludeStartLoci,excludeEndLoci]
+                logging.debug("Adding exclusion: {},{},{}".format(excludeLabel,excludeStartLoci,excludeEndLoci)) 
             else:
                 print_all("Badly formatted line: {} at line {}. Quitting!".format(excludeLine,excludeCount))
                 sys.exit(1)
@@ -268,8 +268,9 @@ if __name__ == '__main__':
             # Check exclusion of locus.
             excluded = False
             for excludeLabel in exclusionTable:
-                excludeStartLocus = exclusionTable[excludeLabel][0]
-                excludeEndLocus = exclusionTable[excludeLabel][1]
+                excludeStartLocus = int(exclusionTable[excludeLabel][0])
+                excludeEndLocus = int(exclusionTable[excludeLabel][1])
+                #logging.debug("Exclusion test: is {} between {} and {}".format(locus,excludeStartLocus,excludeEndLocus))
                 if locus >= excludeStartLocus and locus <= excludeEndLocus:
                     excluded = True
                     logging.debug("Excluded loci %s",locus)
