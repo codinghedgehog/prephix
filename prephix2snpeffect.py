@@ -13,6 +13,7 @@
 # 7/31/2013 -- VERSION 2.0.0 - Moved to Sqlite3 datastore and query processing, instead of dictionaries.
 # 7/31/2013 -- VERSION 2.0.1 - Add better error output on database insert failure.
 # 8/21/2013 -- VERSION 2.1.0 - Removed reporting of duplicate bases at same locus.
+# 12/28/2013 -- VERSION 2.2.0 - Added logic to ignore inserts of duplicate strain id/locus/base during SNP processing.
 
 import sys
 import os
@@ -23,7 +24,7 @@ import cStringIO
 import math
 import sqlite3
 
-VERSION = '2.1.0'
+VERSION = '2.2.0'
 
 # MAIN #
 
@@ -99,9 +100,23 @@ with dbconn:
             snpBase = snpLineMatch.group("snpBase")
             try:
                 dbconn.execute('''INSERT INTO SNP_DATA (strainid,locus,base) VALUES (?,?,?)''',(strainid,locus,snpBase))
+            except sqlite3.IntegrityError as e:
+                # IntegrityError can be caused by non-unique straid and locus.  This is ok if the BASE is the same, however.
+                # Ignore if this is a true duplicate.  Else it is an error.
+                dbcursor.execute('''SELECT base FROM SNP_DATA WHERE STRAINID= ? AND LOCUS = ?''',(strainid,locus))
+                for row in dbcursor.fetchall():
+                    selectBase = str(row[0])
+
+                if selectBase == snpBase:
+                    print "Ignoring duplicate base {} at locus {} for strain {}".format(snpBase,locus,strainid)
+                else:
+                    print "*** DATABASE error inserting {} {} {}".format(strainid,locus,snpBase)
+                    print "Existing base at this locus for this strain is {}.  Tried to insert different base {} at same locus for same strain id!".format(selectBase,snpBase)
+                    raise 
             except:
                 print "*** DATABASE error inserting {} {} {}".format(strainid,locus,snpBase)
                 raise 
+
         else:
             print "*** ERROR: Bad line in {0}! Not a prephix SNP file?".format(snpFilename)
             print "Cannot parse line: {0}".format(snpLine)
