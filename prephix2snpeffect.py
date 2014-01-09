@@ -24,7 +24,7 @@ import cStringIO
 import math
 import sqlite3
 
-VERSION = '2.2.0'
+VERSION = '2.3.0'
 
 # MAIN #
 
@@ -91,6 +91,12 @@ sys.stdout.flush()
 
 with dbconn:
     for snpLine in snpFile:
+        # Skip strains with no SNPs (will have locus value -1)
+        snpBadLocusMatch = re.match("^(?P<strainid>[^\t]+)\t-1",snpLine)
+        if snpBadLocusMatch:
+            print "Ignoring entry for strain {} due to locus value of -1 (No SNPs).".format(str(snpBadLocusMatch.group(strainid)))
+            continue
+
         # Expect the prephix snp output file to be in format: STRAIN_ID\tLOCUS\tSNP_BASE
         snpLineMatch = re.match("^(?P<strainid>[^\t]+)\t(?P<locus>\d+)\t(?P<snpBase>[ACGT])$",snpLine)
         if snpLineMatch:
@@ -98,6 +104,7 @@ with dbconn:
             strainid = snpLineMatch.group("strainid")
             locus = snpLineMatch.group("locus")
             snpBase = snpLineMatch.group("snpBase")
+
             try:
                 dbconn.execute('''INSERT INTO SNP_DATA (strainid,locus,base) VALUES (?,?,?)''',(strainid,locus,snpBase))
             except sqlite3.IntegrityError as e:
