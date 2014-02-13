@@ -59,6 +59,7 @@ def getSNPFileReader(fileName,filterQuality=True):
                 break
             elif vcfRe.match(line):
                 fileFormat = "vcf"
+                break
 
     if fileFormat == "k28":
         return K28FileReader(fileName)
