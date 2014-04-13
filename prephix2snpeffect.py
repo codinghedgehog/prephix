@@ -14,6 +14,7 @@
 # 7/31/2013 -- VERSION 2.0.1 - Add better error output on database insert failure.
 # 8/21/2013 -- VERSION 2.1.0 - Removed reporting of duplicate bases at same locus.
 # 12/28/2013 -- VERSION 2.2.0 - Added logic to ignore inserts of duplicate strain id/locus/base during SNP processing.
+# 4/13/2014 -- VERSION 2.2.1 - Fixed minor bug in reporting of empty strain inputs.
 
 import sys
 import os
@@ -24,7 +25,7 @@ import cStringIO
 import math
 import sqlite3
 
-VERSION = '2.3.0'
+VERSION = '2.3.1'
 
 # MAIN #
 
@@ -94,7 +95,7 @@ with dbconn:
         # Skip strains with no SNPs (will have locus value -1)
         snpBadLocusMatch = re.match("^(?P<strainid>[^\t]+)\t-1",snpLine)
         if snpBadLocusMatch:
-            print "Ignoring entry for strain {} due to locus value of -1 (No SNPs).".format(str(snpBadLocusMatch.group(strainid)))
+            print "Ignoring entry for strain {} due to locus value of -1 (No SNPs).".format(str(snpBadLocusMatch.group("strainid")))
             continue
 
         # Expect the prephix snp output file to be in format: STRAIN_ID\tLOCUS\tSNP_BASE
