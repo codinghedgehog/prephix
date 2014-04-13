@@ -87,6 +87,19 @@ class SNPFileReadError(Exception):
         self.lineNumber = lineNumber
         self.lineText = line
 
+class SNPFileUnrecognizedLineError(Exception):
+    '''
+    This is a custom exception thrown when an unrecognized line
+    is read from an SNP data file.
+
+    It requires a message, with optional line number and the
+    line text itself where the error occurred.
+    '''
+    def __init__(self,message,lineNumber=None,line=None):
+        super(SNPFileUnrecognizedLineError,self).__init__(message)
+        self.lineNumber = lineNumber
+        self.lineText = line
+
 
 #
 # Classes
@@ -146,17 +159,15 @@ class K28FileReader(SNPFileReader):
                 break
 
         # Skip to the first line of data.
-        foundHeader = False
         while self.lineNumber <= len(self._fileLines):
             line = self._fileLines[self.lineNumber - 1]
             # Ignore other comments in the file (lines starting with #).  This includes the header comments.
             # Also skip the > line (don't care about genbank_id_from_ref_genome_file).
-            if not foundHeader:
-                if not re.match("^(#|>)",line):
-                    # Exit now since this IS a data line. Want to end with line number pointing to first data line.
-                    foundHeader = True
-                    break
-            self.lineNumber += 1
+            if not re.match("^(#|>)",line):
+                # Exit now since this IS a data line. Want to end reading right here.
+                break
+            else:
+                self.lineNumber += 1
 
 
     def __iter__(self):
@@ -219,7 +230,7 @@ class K28FileReader(SNPFileReader):
 
                 yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
-                raise SNPFileReadError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
+                raise SNPFileUnrecognizedLineError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
 
 class NucmerFileReader(SNPFileReader):
     '''
@@ -252,19 +263,17 @@ class NucmerFileReader(SNPFileReader):
                 break
 
         # Open the file and skip to the first line of data.
-        foundHeader = False
         while self.lineNumber <= len(self._fileLines):
             line = self._fileLines[self.lineNumber - 1].strip(os.linesep)
 
             # Keep skipping lines until we reach the data portion.  This should occur after the data header line:
             # [P1]  [SUB] [SUB] [P2]  [BUFF]  [DIST]  [LEN R] [LEN Q] [FRM] [TAGS]
             # So look for [P1]
-            if not foundHeader:
-                if re.match("^\[P1\]",line):
-                    # Found header. Exit on next pass to advance line number to the first data line (first line after this header)
-                    foundHeader = True
-            else:
+            if re.match("^\[P1\]",line):
+                # Found header. Advance line number to the first data line (first line after this header) and stop.
+                self.lineNumber += 1
                 break
+
             self.lineNumber += 1
 
     def __iter__(self):
@@ -322,7 +331,7 @@ class NucmerFileReader(SNPFileReader):
 
                 yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
-                raise SNPFileReadError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
+                raise SNPFileUnrecognizedLineError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
 
 class VCFFileReader(SNPFileReader):
     '''
@@ -350,19 +359,16 @@ class VCFFileReader(SNPFileReader):
         fh = open(fileName,"r")
         self._fileLines = fh.readlines()
         fh.close()
-        foundHeader = False
         for line in self._fileLines:
             self.lineNumber += 1
 
             # Keep skipping lines until we reach the data portion.  This should occur after the data header line:
             #CHROM  POS ID  REF ALT QUAL  FILTER  INFO
             # So look for #CHROM
-            if not foundHeader:
-                if re.match("^#CHROM\s+POS\s+ID",line):
-                    # Found header!  Advance one more line to actual data line.
-                    foundHeader = True
-                continue
-            else:
+            if re.match("^#CHROM\s+POS\s+ID",line):
+                # Found header!  Advance one more line to actual data line and stop looking.
+                self.lineNumber += 1
+                #print "lineNumber is " + str(self.lineNumber) + " and filesLines is "  + str(len(self._fileLines))
                 break
 
 
@@ -375,6 +381,7 @@ class VCFFileReader(SNPFileReader):
             lineNumber = self.lineNumber
             line = self._fileLines[lineNumber - 1].strip(os.linesep)
             self.lineNumber += 1
+            #print "lineNumber is " + str(self.lineNumber) + " and filesLines is "  + str(len(self._fileLines))
             # At this point, should be at a data line.
 
             # Assuming VCF input body data to be in the format:
@@ -411,4 +418,4 @@ class VCFFileReader(SNPFileReader):
 
                 yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
-                raise SNPFileReadError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
+                raise SNPFileUnrecognizedLineError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
