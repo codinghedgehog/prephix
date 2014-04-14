@@ -20,9 +20,6 @@
 #
 # You may mix input file types within a single run/batch.
 #
-# 8/08/2013 - Andrew Pann - Initial port of perl-version Prephix (v2.5.2) to 3.0.
-# 8/12/2013 - Andrew Pann - v3.1.0 - Added handling of empty snp input files (header, but no data).
-
 
 import sys
 import os
@@ -36,7 +33,7 @@ import statprof
 # Custom include
 import SNPInputReader
 
-VERSION = '3.2.0'
+VERSION = '3.2.1'
 
 
 
@@ -71,7 +68,7 @@ if __name__ == '__main__':
     argParser.add_argument("input_files",nargs='*',help="One or more input files. Supported input file formats are k28.out (VAAL), NUCMER, VCF.")
     argParser.add_argument("-batchid","--batchid",required=True,help="Used to create the output filenames for the combined SNP loci and ref files.")
     argParser.add_argument("-exclude","--exclude",metavar='loci_exclusion_file',help="Exclude any bases within the loci ranges listed in the loci exclusion file.  The file should contain lines of the format 'label,start_loci,end_loci'")
-    argParser.add_argument("-ignore_quality","--ignore_quality",action="store_true",help="Exclude any bases within the loci ranges listed in the loci exclusion file.  The file should contain lines of the format 'label,start_loci,end_loci'")
+    argParser.add_argument("-filter_quality","--filter_quality",action="store_true",help="Exclude any bases not passing the quality filter in VCF files.",default=False)
     argParser.add_argument("-tablog","--tablog",action="store_true",help="Print out the summary in tabular format.")
     argParser.add_argument("-export_phenolink","--export_phenolink",action="store_true",help="Additionally write out a Pheonolink compatible output file.")
     argParser.add_argument("-debug","--debug",action="store_true",help="Debug mode.")
@@ -99,9 +96,11 @@ if __name__ == '__main__':
     batchid = args.batchid
     print "Batch id is {}".format(batchid)
 
-    filterQuality = not args.ignore_quality
+    filterQuality = args.filter_quality
     if not filterQuality:
         print "Will process all lines, ignoring quality value (only applicable for VCF input files)."
+    else:
+        print "Will processes only lines passing quality value (for VCF input files)."
 
     writeTablog = args.tablog
     if writeTablog:
