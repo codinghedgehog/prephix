@@ -39,7 +39,7 @@ progname = os.path.abspath(sys.argv[0])
 # Define arguments.
 argParser.add_argument("ref_file",help="The prephix written reference output file.")
 argParser.add_argument("snp_file",help="The prephix written snp file output.")
-argParser.add_argument("--dbfile",nargs=1,help="The database filename.")
+argParser.add_argument("--dbfile",nargs=1,help="The SQLite database filename. Optional and useful for debugging.")
 argParser.add_argument("-d","--debug",action="store_true",help="Debug mode.")
 
 args = argParser.parse_args()
