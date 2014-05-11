@@ -225,7 +225,7 @@ class K28FileReader(SNPFileReader):
                     else:
                         # Deletion found.
                         isIndel = True
-                        isInsert = True
+                        isDelete = True
 
 
                 yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
@@ -326,7 +326,7 @@ class NucmerFileReader(SNPFileReader):
                     else:
                         # Deletion found.
                         isIndel = True
-                        isInsert = True
+                        isDelete = True
 
 
                 yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
@@ -407,14 +407,24 @@ class VCFFileReader(SNPFileReader):
                     continue
 
                 # Check for indels.
-                if len(refBase) != 1:
-                    # Deletion found.
-                    isIndel = True
-                    isDelete = True
-                elif len(snpBase) != 1:
-                    # Insertion found.
-                    isIndel = True
-                    isInsert = True
+                if len(snpBase) != 1:
+                    if len(snpBase) == 0:
+                        # Deletion found.
+                        isIndel = True
+                        isDelete = True
+                    else:
+                        # Insertion found.
+                        isIndel = True
+                        isInsert = True
+                elif len(refBase) != 1:
+                    if len(refBase) == 0:
+                        # Insertion found.
+                        isIndel = True
+                        isInsert = True
+                    else:
+                        # Deletion found.
+                        isIndel = True
+                        isDelete = True
 
                 yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
