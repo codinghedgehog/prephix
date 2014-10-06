@@ -407,8 +407,8 @@ class VCFFileReader(SNPFileReader):
                     continue
 
                 # Check for indels.
-                if len(snpBase) != 1:
-                    if len(snpBase) == 0:
+                if len(snpBase) != len(refBase):
+                    if len(snpBase) < len(refBase):
                         # Deletion found.
                         isIndel = True
                         isDelete = True
@@ -416,15 +416,6 @@ class VCFFileReader(SNPFileReader):
                         # Insertion found.
                         isIndel = True
                         isInsert = True
-                elif len(refBase) != 1:
-                    if len(refBase) == 0:
-                        # Insertion found.
-                        isIndel = True
-                        isInsert = True
-                    else:
-                        # Deletion found.
-                        isIndel = True
-                        isDelete = True
 
                 yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
             else:
