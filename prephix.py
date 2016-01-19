@@ -33,7 +33,7 @@ import statprof
 # Custom include
 import SNPInputReader
 
-VERSION = '3.2.3'
+VERSION = '3.3.0'
 
 
 
@@ -72,6 +72,7 @@ if __name__ == '__main__':
     argParser.add_argument("-tablog","--tablog",action="store_true",help="Print out the summary in tabular format.")
     argParser.add_argument("-export_phenolink","--export_phenolink",action="store_true",help="Additionally write out a Pheonolink compatible output file.")
     argParser.add_argument("-debug","--debug",action="store_true",help="Debug mode.")
+    argParser.add_argument("-multichrom","--multichrom",action="store_true",help="VCF files have multi-chrom values.")
     argParser.add_argument("-quiet","--quiet",action="store_true",help="Quiet mode.")
 
 
@@ -109,6 +110,10 @@ if __name__ == '__main__':
     exportPhenoLink = args.export_phenolink
     if exportPhenoLink:
         print "Will export a PhenoLink file."
+
+    multiChrom = args.multichrom
+    if multiChrom:
+        print "Will use multi-FASTA (multi-chrom) parsing on VCF input files."
 
     inputFileList = args.input_files
     fileCount = 0
@@ -216,7 +221,7 @@ if __name__ == '__main__':
         inputFilename = inputFileList.pop()
 
         fileCount += 1
-        snpFileReader = SNPInputReader.getSNPFileReader(inputFilename,filterQuality)
+        snpFileReader = SNPInputReader.getSNPFileReader(inputFilename,filterQuality, multiChrom)
         strainid = snpFileReader.strainID
         fileFormat = snpFileReader.fileFormat
         shortFilename = os.path.basename(inputFilename)

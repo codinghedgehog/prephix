@@ -23,7 +23,7 @@ import sys
 #
 # Public Methods
 #
-def getSNPFileReader(fileName,filterQuality=True):
+def getSNPFileReader(fileName,filterQuality=True,multiChrom=False):
     '''
     This is basically an factory method that takes
     in an SNP input file name for Prephix, determines
@@ -39,6 +39,8 @@ def getSNPFileReader(fileName,filterQuality=True):
 
         filterQuality = (OPTIONAL) Used by VCF file reader for filtering on quality (default is to return only PASS quality).
             Setting filterQuality to False will have the reader return all lines without regard to quality.
+
+        multiChrom = (OPTIONAL) Used by VCF file read for indicating  multi-Chrom parsing or not.
 
 
     '''
@@ -66,7 +68,7 @@ def getSNPFileReader(fileName,filterQuality=True):
     elif fileFormat == "nucmer":
         return NucmerFileReader(fileName)
     elif fileFormat == "vcf":
-        return VCFFileReader(fileName,filterQuality)
+        return VCFFileReader(fileName,filterQuality,multiChrom)
     else:
         raise NotImplementedError
 
@@ -340,7 +342,7 @@ class VCFFileReader(SNPFileReader):
     '''
 
 
-    def __init__(self,fileName,filterQuality=True):
+    def __init__(self,fileName,filterQuality=True, multiChrom=False):
         '''
         filterQuality parameter is a flag to indicate if it should filter data lines having only PASS quality filter values.
         '''
@@ -349,7 +351,10 @@ class VCFFileReader(SNPFileReader):
         self.filterQuality = filterQuality
         self.lineNumber = 0
         self._fileLines = []
-        self.vcflineRe = re.compile("^[^\t]+\t(?P<locus>[0-9]+)\t[^\t]+\t(?P<ref_base>[ATCGN,]+)\t(?P<sample_base>[ATCGN,]+)\t[^\t]+\t(?P<filter>[^\t]+)\t")
+        self.multiChrom = multiChrom
+
+        # NOTE: If processing multi-chrom FASTA files, Locus becomes CHROM + POS, instead of just POS.
+        self.vcflineRe = re.compile("^(?P<chrom>[^\t]+)\t(?P<locus>[0-9]+)\t[^\t]+\t(?P<ref_base>[ATCGN,]+)\t(?P<sample_base>[ATCGN,]+)\t[^\t]+\t(?P<filter>[^\t]+)\t")
 
         # Set the strainID to the filename for now.
         self.strainID = os.path.basename(fileName)
@@ -393,7 +398,10 @@ class VCFFileReader(SNPFileReader):
 
             lineMatch = self.vcflineRe.match(line)
             if lineMatch:
-                realLocus = int(lineMatch.group('locus'))
+                if self.multiChrom:
+                    realLocus = str(lineMatch.group('chrom')) + '-' + str(lineMatch.group('locus')) 
+                else:
+                    realLocus = int(lineMatch.group('locus'))
                 snpBase = lineMatch.group('sample_base')
                 refBase = lineMatch.group('ref_base')
                 filter = lineMatch.group('filter')
