@@ -45,11 +45,13 @@ def getSNPFileReader(fileName,filterQuality=True,multiChrom=False):
 
     '''
     fileFormat = "unknown"
+    fileEmpty = True
 
     # Define regexes for recognizing the file type based on its contents.
     k28Re = re.compile("^#(.+?)\/")
     nucmerRe = re.compile("^NUCMER$")
     vcfRe = re.compile("^##fileformat=VCF")
+    empty = re.compile("^ *$")
 
     with open(fileName,"r") as inputFile:
         for line in inputFile:
@@ -62,6 +64,9 @@ def getSNPFileReader(fileName,filterQuality=True,multiChrom=False):
             elif vcfRe.match(line):
                 fileFormat = "vcf"
                 break
+            elif not empty.match(line):
+                fileEmpty = False
+                
 
     if fileFormat == "k28":
         return K28FileReader(fileName)
@@ -69,12 +74,20 @@ def getSNPFileReader(fileName,filterQuality=True,multiChrom=False):
         return NucmerFileReader(fileName)
     elif fileFormat == "vcf":
         return VCFFileReader(fileName,filterQuality,multiChrom)
+    elif fileEmpty:
+        raise EmptyFileError
     else:
         raise NotImplementedError
 
 #
 # Custom Exceptions
 #
+class EmptyFileError(Exception):
+    '''
+    This is a custom exception thrown when an empty or size
+    zero file is encountered.
+    '''
+    pass
 
 class SNPFileReadError(Exception):
     '''

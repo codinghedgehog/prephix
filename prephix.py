@@ -33,7 +33,7 @@ import statprof
 # Custom include
 import SNPInputReader
 
-VERSION = '3.3.0'
+VERSION = '3.3.1'
 
 
 
@@ -215,13 +215,21 @@ if __name__ == '__main__':
 
 
     fileCount = 0
+    skippedFileCount = 0
     # Process the snp files.
     while len(inputFileList) > 0:
 
         inputFilename = inputFileList.pop()
 
         fileCount += 1
-        snpFileReader = SNPInputReader.getSNPFileReader(inputFilename,filterQuality, multiChrom)
+	try:
+	    snpFileReader = SNPInputReader.getSNPFileReader(inputFilename,filterQuality, multiChrom)
+	except SNPInputReader.EmptyFileError as efe:
+            print_all("*** WARNING: Skipping empty file: {0}".format(inputFilename))
+            logging.debug("*** WARNING: Skipping empty file: {0}".format(inputFilename))
+            skippedFileCount = skippedFileCount + 1
+            continue
+
         strainid = snpFileReader.strainID
         fileFormat = snpFileReader.fileFormat
         shortFilename = os.path.basename(inputFilename)
@@ -325,7 +333,11 @@ if __name__ == '__main__':
 
     # Write out the reference file from the table of merged ref loci bases from the input file.
     # Output format is Loci [TAB] Base
+    print_all("")
     print_all("{} files were processed.".format(fileCount))
+    print_all("")
+    print_all("WARNING --> {} files were SKIPPED (empty?).".format(skippedFileCount))
+    print_all("")
     print_all("Merging and generating reference file from input file data....")
     refDataTableKeyList = refDataTable.keys()
     refDataTableKeyList.sort()
