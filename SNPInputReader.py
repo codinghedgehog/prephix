@@ -71,7 +71,7 @@ def getSNPFileReader(fileName,filterQuality=True,multiChrom=False):
     if fileFormat == "k28":
         return K28FileReader(fileName)
     elif fileFormat == "nucmer":
-        return NucmerFileReader(fileName)
+        return NucmerFileReader(fileName,multiChrom)
     elif fileFormat == "vcf":
         return VCFFileReader(fileName,filterQuality,multiChrom)
     elif fileEmpty:
@@ -254,12 +254,13 @@ class NucmerFileReader(SNPFileReader):
     '''
 
 
-    def __init__(self,fileName):
+    def __init__(self,fileName,multiChrom = False):
         super(NucmerFileReader,self).__init__(fileName)
         self.fileFormat = "nucmer"
         self.lineNumber = 0
+	self.multiChrom = multiChrom
 
-        self.nucmerlineRe = re.compile("^(?P<locus>[0-9]+)\t(?P<ref_base>[ATCG]*)\t(?P<sample_base>[ATCG]*)\t[0-9]+")
+        self.nucmerlineRe = re.compile("^(?P<locus>[0-9]+)\t(?P<ref_base>[ATCG]*)\t(?P<sample_base>[ATCG]*)\t[0-9]+\t.*\t(?P<chrom>.*?)\t.*$")
 
         # Find the strainID
         fh = open(fileName,"r")
@@ -315,7 +316,12 @@ class NucmerFileReader(SNPFileReader):
 
             lineMatch = self.nucmerlineRe.search(line)
             if lineMatch:
-                realLocus = int(lineMatch.group('locus'))
+
+		if self.multiChrom:
+			realLocus = str(lineMatch.group('chrom')) + '-' + str(lineMatch.group('locus'))
+		else:
+			realLocus = int(lineMatch.group('locus'))
+
                 snpBase = lineMatch.group('sample_base')
                 refBase = lineMatch.group('ref_base')
 
