@@ -373,7 +373,7 @@ class VCFFileReader(SNPFileReader):
         self.multiChrom = multiChrom
 
         # NOTE: If processing multi-chrom FASTA files, Locus becomes CHROM + POS, instead of just POS.
-        self.vcflineRe = re.compile("^(?P<chrom>[^\t]+)\t(?P<locus>[0-9]+)\t[^\t]+\t(?P<ref_base>[ATCGN,]+)\t(?P<sample_base>[ATCGN,]+)\t[^\t]+\t(?P<filter>[^\t]+)\t")
+        self.vcflineRe = re.compile("^(?P<chrom>[^\t]+)\t(?P<locus>[0-9]+)\t[^\t]+\t(?P<ref_base>[ATCGNatcgn,]+)\t(?P<sample_base>[ATCGNatcgn,]+)\t[^\t]+\t(?P<filter>[^\t]+)\t")
 
         # Set the strainID to the filename for now.
         self.strainID = os.path.basename(fileName)
