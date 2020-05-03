@@ -258,7 +258,7 @@ class NucmerFileReader(SNPFileReader):
         super(NucmerFileReader,self).__init__(fileName)
         self.fileFormat = "nucmer"
         self.lineNumber = 0
-	self.multiChrom = multiChrom
+        self.multiChrom = multiChrom
 
         self.nucmerlineRe = re.compile("^(?P<locus>[0-9]+)\t(?P<ref_base>[ATCG]*)\t(?P<sample_base>[ATCG]*)\t[0-9]+\t.*\t(?P<chrom>.*?)\t.*$")
 
@@ -317,10 +317,10 @@ class NucmerFileReader(SNPFileReader):
             lineMatch = self.nucmerlineRe.search(line)
             if lineMatch:
 
-		if self.multiChrom:
-			realLocus = str(lineMatch.group('chrom')) + '-' + str(lineMatch.group('locus'))
-		else:
-			realLocus = int(lineMatch.group('locus'))
+                if self.multiChrom:
+                    realLocus = str(lineMatch.group('chrom')) + '-' + str(lineMatch.group('locus'))
+                else:
+                    realLocus = int(lineMatch.group('locus'))
 
                 snpBase = lineMatch.group('sample_base')
                 refBase = lineMatch.group('ref_base')

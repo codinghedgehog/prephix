@@ -222,9 +222,9 @@ if __name__ == '__main__':
         inputFilename = inputFileList.pop()
 
         fileCount += 1
-	try:
+        try:
 	    snpFileReader = SNPInputReader.getSNPFileReader(inputFilename,filterQuality, multiChrom)
-	except SNPInputReader.EmptyFileError as efe:
+        except SNPInputReader.EmptyFileError as efe:
             print_all("*** WARNING: Skipping empty file: {0}".format(inputFilename))
             logging.debug("*** WARNING: Skipping empty file: {0}".format(inputFilename))
             skippedFileCount = skippedFileCount + 1
