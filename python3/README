@@ -1,0 +1,7 @@
+This directory contains an experimental python3 port of phrephix.
+
+Required modules:
+
+statprof
+
+Usage syntax should be identical to the python2 version.
