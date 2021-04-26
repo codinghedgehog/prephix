@@ -51,6 +51,7 @@ def getSNPFileReader(fileName,filterQuality=True,multiChrom=False):
     k28Re = re.compile("^#(.+?)\/")
     nucmerRe = re.compile("^NUCMER$")
     vcfRe = re.compile("^##fileformat=VCF")
+    varRe = re.compile("^REGION\tPOS\tREF\tALT\tREF_DP\tREF_RV\tREF_QUAL\tALT_DP\tALT_RV\tALT_QUAL\tALT_FREQ\tTOTAL_DP\tPVAL\tPASS\tGFF_FEATURE\tREF_CODON\tREF_AA\tALT_CODON\tALT_AA$")
     empty = re.compile("^ *$")
 
     with open(fileName,"r") as inputFile:
@@ -64,6 +65,9 @@ def getSNPFileReader(fileName,filterQuality=True,multiChrom=False):
             elif vcfRe.match(line):
                 fileFormat = "vcf"
                 break
+            elif varRe.match(line):
+                fileFormat= "var"
+                break
             elif not empty.match(line):
                 fileEmpty = False
                 
@@ -74,6 +78,8 @@ def getSNPFileReader(fileName,filterQuality=True,multiChrom=False):
         return NucmerFileReader(fileName,multiChrom)
     elif fileFormat == "vcf":
         return VCFFileReader(fileName,filterQuality,multiChrom)
+    elif fileFormat == "var":
+        return VARFileReader(fileName,filterQuality)
     elif fileEmpty:
         raise EmptyFileError
     else:
@@ -421,6 +427,95 @@ class VCFFileReader(SNPFileReader):
                     realLocus = str(lineMatch.group('chrom')) + '-' + str(lineMatch.group('locus')) 
                 else:
                     realLocus = int(lineMatch.group('locus'))
+                snpBase = lineMatch.group('sample_base')
+                refBase = lineMatch.group('ref_base')
+                filter = lineMatch.group('filter')
+
+                isIndel = False
+                isDelete = False
+                isInsert = False
+
+                if self.filterQuality and filter != "PASS":
+                    # Ignore low quality line.
+                    continue
+
+                # Check for indels.
+                if len(snpBase) != len(refBase):
+                    if len(snpBase) < len(refBase):
+                        # Deletion found.
+                        isIndel = True
+                        isDelete = True
+                    else:
+                        # Insertion found.
+                        isIndel = True
+                        isInsert = True
+
+                yield (line,lineNumber,realLocus,snpBase,refBase,isIndel,isInsert,isDelete)
+            else:
+                raise SNPFileUnrecognizedLineError("Unrecognized line at {}: {}".format(lineNumber,line),lineNumber,line)
+
+class VARFileReader(SNPFileReader):
+    '''
+    This is a concrete implementation of a file reader
+    for TSV/VAR data.
+    '''
+
+
+    def __init__(self,fileName,filterQuality=True):
+        '''
+        filterQuality parameter is a flag to indicate if it should filter data lines having only PASS quality filter values of TRUE.
+        '''
+        super(VARFileReader,self).__init__(fileName)
+        self.fileFormat = "vcf"
+        self.filterQuality = filterQuality
+        self.lineNumber = 0
+        self._fileLines = []
+
+        self.varlineRe = re.compile("^(?P<region>[^\t]+)\t(?P<locus>[0-9]+)\t(?P<ref_base>[ATCGNatcgn,]+)\t(?P<sample_base>[ATCGNatcgn,]+)\t[^\t]+\t[^\t]+\t[^\t]+\t[^\t]+\t[^\t]+\t[^\t]+\t[^\t]+\t[^\t]+\t[^\t]+\t(?P<filter>[^\t]+)\t")
+
+        # Set the strainID to the filename for now.
+        self.strainID = os.path.basename(fileName)
+
+        # Open the file and skip to the first line of data.
+        # Move past the header lines (not needed since it's been determined elsewhere what this file type is).
+        fh = open(fileName,"r")
+        self._fileLines = fh.readlines()
+        fh.close()
+        for line in self._fileLines:
+            self.lineNumber += 1
+
+            # Keep skipping lines until we reach the data portion.  This should occur after the data header line:
+            # REGION  POS     REF     ALT     REF_DP  REF_RV  REF_QUAL        ALT_DP  ALT_RV  ALT_QUAL        ALT_FREQ        TOTAL_DP        PVAL    PASS    GFF_FEATURE     REF_CODON       REF_AA  ALT_CODON       ALT_AA
+            # So look for #^REGION\tPOS\tREF\tALT
+            if re.match("^REGION\tPOS\tREF\tALT\tREF_DP\tREF_RV\tREF_QUAL\tALT_DP\tALT_RV\tALT_QUAL\tALT_FREQ\tTOTAL_DP\tPVAL\tPASS\tGFF_FEATURE\tREF_CODON\tREF_AA\tALT_CODON\tALT_AA$",line):
+                # Found header!  Advance one more line to actual data line and stop looking.
+                self.lineNumber += 1
+                #print "lineNumber is " + str(self.lineNumber) + " and filesLines is "  + str(len(self._fileLines))
+                break
+
+
+    def __iter__(self):
+        '''
+        Concrete implementation of iterator protocol (as a generator) to get the next line of data.
+        '''
+
+        while self.lineNumber <= len(self._fileLines):
+            lineNumber = self.lineNumber
+            line = self._fileLines[lineNumber - 1].strip(os.linesep)
+            self.lineNumber += 1
+            #print "lineNumber is " + str(self.lineNumber) + " and filesLines is "  + str(len(self._fileLines))
+            # At this point, should be at a data line.
+
+            # Assuming VAR input body data to be in the format:
+            # CHROM  POS  REF ALT (+9 fields) PASS
+            # Only care about the pos (loci), ref, alt (sample), and filter (PASS) columns.
+            #
+            # Assuming fields are tab-delimited.
+            #
+
+            lineMatch = self.varlineRe.match(line)
+            if lineMatch:
+                realLocus = int(lineMatch.group('locus'))
                 snpBase = lineMatch.group('sample_base')
                 refBase = lineMatch.group('ref_base')
                 filter = lineMatch.group('filter')

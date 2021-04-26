@@ -33,7 +33,7 @@ import statprof
 # Custom include
 import SNPInputReader3 as SNPInputReader
 
-VERSION = '3.5.0'
+VERSION = '3.6.0'
 
 
 
